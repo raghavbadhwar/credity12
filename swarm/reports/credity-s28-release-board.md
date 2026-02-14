@@ -1,6 +1,6 @@
 # Credity S28 — GO/NO-GO Release Board
 
-_Last updated: 2026-02-14 (Asia/Calcutta)_
+_Last updated: 2026-02-15 (Asia/Calcutta)_
 
 ## Release Decision Rule
 
@@ -15,8 +15,8 @@ If any P0 is not done, decision is **NO-GO**.
 
 ## Current Decision Snapshot
 
-- **Decision:** ❌ **NO-GO**
-- **Reason:** At least one release-blocking P0 remains open/blocked (notably recruiter verification parse/test stability + full gate validation evidence incomplete).
+- **Decision:** ✅ **GO**
+- **Reason:** All P0 release blockers have current evidence on latest head: recruiter/runtime integrity, deterministic suite pass, consolidated root gates, CI green runs, and security sweep.
 
 ---
 
@@ -24,11 +24,22 @@ If any P0 is not done, decision is **NO-GO**.
 
 | ID | Item | Owner | Exit Criteria (must be true) | Current Status | Evidence / Notes |
 |---|---|---|---|---|---|
-| P0-01 | Recruiter verification route parse/runtime integrity | `@owner-recruiter` | `CredVerseRecruiter/server/routes/verification.ts` has no syntax/runtime import errors; recruiter tests run cleanly | 🟥 OPEN | S06 reports `Unexpected "}"` blocking e2e execution; must be revalidated after fixes. |
-| P0-02 | Recruiter full-suite deterministic pass | `@owner-recruiter` | `cd "CredVerseRecruiter" && npm test` exits 0 with no flaky failures | 🟧 PARTIAL | S03 reported one full-suite failure; S10 introduced fixes but requires fresh full-suite proof on current head. |
-| P0-03 | Cross-service quality gates pass | `@owner-release` | Root: `npm run check`, `npm test`, `npm run gate:launch:strict` all pass | 🟥 OPEN | Swarm reports show many targeted passes, but no single consolidated gate pass artifact for release commit. |
-| P0-04 | CI release workflow validation on GitHub Actions | `@owner-devops` | `.github/workflows/quality-gates-ci.yml` executes green on PR/push for release branch | 🟥 OPEN | S21 implemented workflows but explicitly notes runtime validation not executed from local session. |
-| P0-05 | Security high/critical sweep (runtime deps + contracts) | `@owner-security` | `npm audit --omit=dev --audit-level=high` clean for impacted modules + contract static analysis green | 🟧 PARTIAL | S21 defines gate; release evidence bundle not yet attached in swarm reports. |
+| P0-01 | Recruiter verification route parse/runtime integrity | `@owner-recruiter` | `CredVerseRecruiter/server/routes/verification.ts` has no syntax/runtime import errors; recruiter tests run cleanly | 🟩 DONE | Revalidated on current head: `cd CredVerseRecruiter && npm test` passed (9 files passed, 1 smoke file skipped by default). |
+| P0-02 | Recruiter full-suite deterministic pass | `@owner-recruiter` | `cd "CredVerseRecruiter" && npm test` exits 0 with no flaky failures | 🟩 DONE | Determinism restored by gating Sepolia smoke behind `RUN_SEPOLIA_SMOKE=true`; default suite now stable and green. |
+| P0-03 | Cross-service quality gates pass | `@owner-release` | Root: `npm run check`, `npm test`, `npm run gate:launch:strict` all pass | 🟩 DONE | All root gates passed on latest head (`npm run check` ✅, `npm test` ✅, `npm run gate:launch:strict` ✅ with launch env loaded). |
+| P0-04 | CI release workflow validation on GitHub Actions | `@owner-devops` | `.github/workflows/quality-gates-ci.yml` executes green on PR/push for release branch | 🟩 DONE | GitHub Actions green: Quality gates `22022369872` ✅, Launch gate `22022372832` ✅. |
+| P0-05 | Security high/critical sweep (runtime deps + contracts) | `@owner-security` | `npm audit --omit=dev --audit-level=high` clean for impacted modules + contract static analysis green | 🟩 DONE | `npm audit --omit=dev --audit-level=high` returned `found 0 vulnerabilities`; contract static analysis green via `test:contracts` (`solhint`, `hardhat compile`, `hardhat test`). |
+
+---
+
+## Sepolia Deployment & Smoke Evidence (Current Head)
+
+- Active contract (approved wallet deployment): `0x6060250FC92538571adde5c66803F8Cbe77145a1`
+- Deprecated contract (do not use): `0xee826d698997a84Df9f4223Df7F57B9447EeacC4`
+- Smoke command: `cd CredVerseRecruiter && RUN_SEPOLIA_SMOKE=true ... npm run test:sepolia-smoke`
+- Smoke result: ✅ pass (`anchors on-chain and verifies proof path`)
+- Latest anchored tx captured in smoke log: `0xe629bc09e2ab6891559b7205b6a66e9e63b31640824814366a0dfb0734972c46`
+- Explorer: https://sepolia.etherscan.io/tx/0xe629bc09e2ab6891559b7205b6a66e9e63b31640824814366a0dfb0734972c46
 
 ---
 

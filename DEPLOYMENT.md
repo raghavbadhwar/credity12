@@ -19,6 +19,17 @@ Recommended production controls:
 
 Use Secret Manager for all secrets and connect Cloud Run services to Cloud SQL (PostgreSQL regional HA) and Memorystore (Redis).
 
+## 🧪 Sepolia Registry Contract (Current + Deprecated)
+
+- **Current active Sepolia registry (deployer-approved wallet):**
+  - `0x6060250FC92538571adde5c66803F8Cbe77145a1`
+  - https://sepolia.etherscan.io/address/0x6060250FC92538571adde5c66803F8Cbe77145a1
+- **Deprecated (do not use for new integrations):**
+  - `0xee826d698997a84Df9f4223Df7F57B9447EeacC4`
+  - https://sepolia.etherscan.io/address/0xee826d698997a84Df9f4223Df7F57B9447EeacC4
+
+Use only the current active contract for issuer/wallet/recruiter testnet wiring and smoke tests.
+
 ## 🏗️ Architecture Overview
 
 CredVerse is a monorepo with 4 services:

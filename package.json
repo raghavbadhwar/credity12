@@ -12,6 +12,7 @@
     "test:gateway": "cd credverse-gateway && npm run test:proxy",
     "test:mobile": "cd apps/mobile && npm test",
     "test:contracts": "cd \"CredVerseIssuer 3/contracts\" && npm run analyze:static",
+    "test:sepolia-smoke": "cd CredVerseRecruiter && npm run test:sepolia-smoke",
     "lint": "npm run lint:wallet && npm run lint:issuer && npm run lint:recruiter && npm run lint:gateway && npm run lint:shared-auth",
     "lint:wallet": "cd BlockWalletDigi && npm run lint",
     "lint:issuer": "cd \"CredVerseIssuer 3\" && npm run lint",
