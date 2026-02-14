@@ -1,24 +1,26 @@
 import { FormEvent, useState } from 'react';
 import { motion } from 'framer-motion';
+import CountUp from 'react-countup';
+import Marquee from 'react-fast-marquee';
+import Tilt from 'react-parallax-tilt';
 import type { LucideIcon } from 'lucide-react';
 import {
   ArrowRight,
   Blocks,
+  BookCheck,
   Building2,
   CalendarRange,
   CheckCircle2,
   FileBadge2,
   Globe2,
   Landmark,
-  Link2,
   Lock,
   Mail,
-  Rocket,
+  Radar,
   ShieldCheck,
   Sparkles,
   Wallet,
   Workflow,
-  Zap,
 } from 'lucide-react';
 import './App.css';
 
@@ -31,10 +33,10 @@ const PORTAL_URLS = {
 const DEMO_EMAIL = import.meta.env.VITE_DEMO_EMAIL || 'hello@credverse.app';
 
 const metrics = [
-  { value: '4', label: 'Integrated Products' },
-  { value: 'W3C', label: 'DID/VC-Aligned Stack' },
-  { value: 'Sepolia', label: 'Active On-chain Registry' },
-  { value: 'E2E', label: 'Issue → Claim → Verify Flow' },
+  { end: 4, label: 'Integrated Products', suffix: '' },
+  { end: 3, label: 'Core Personas (Issuer / Holder / Recruiter)', suffix: '' },
+  { end: 2, label: 'Proof Lanes (On-chain + ZK-ready)', suffix: '' },
+  { end: 1, label: 'Unified Gateway Experience', suffix: '' },
 ];
 
 const ecosystemCards: Array<{
@@ -48,7 +50,7 @@ const ecosystemCards: Array<{
     title: 'CredVerse Issuer',
     subtitle: 'Institution Command Center',
     description:
-      'Issue standards-compliant Verifiable Credentials, manage templates, and anchor proofs on-chain.',
+      'Issue standards-compliant credentials, manage templates, and anchor verifiable proofs.',
     icon: Building2,
     href: PORTAL_URLS.issuer,
   },
@@ -56,7 +58,7 @@ const ecosystemCards: Array<{
     title: 'BlockWallet Digi',
     subtitle: 'User Sovereignty Engine',
     description:
-      'Holders claim, store, and share credentials while preserving user-controlled consent and portability.',
+      'Claim, hold, and share credentials with holder-first controls and consent-aware workflows.',
     icon: Wallet,
     href: PORTAL_URLS.wallet,
   },
@@ -64,79 +66,58 @@ const ecosystemCards: Array<{
     title: 'CredVerse Recruiter',
     subtitle: 'Verification Intelligence Hub',
     description:
-      'Recruiters verify claims with cryptographic proof paths and fraud-resistant verification workflows.',
+      'Instantly validate credentials with cryptographic proof paths and anti-fraud checks.',
     icon: FileBadge2,
     href: PORTAL_URLS.recruiter,
   },
   {
     title: 'CredVerse Gateway',
-    subtitle: 'Unified Access Layer',
+    subtitle: 'Unified Public Surface',
     description:
-      'Single ecosystem entrypoint for demos, public navigation, and service-level handoff.',
+      'A polished entrypoint for demos, product positioning, and partner onboarding conversations.',
     icon: Globe2,
     href: '#top',
   },
 ];
 
 const capabilities = [
-  'W3C DID + Verifiable Credentials support',
-  'OID4VCI / OID4VP aligned interaction patterns',
+  'W3C DID + Verifiable Credential aligned structures',
+  'OID4VCI / OID4VP interaction-ready pathways',
   'Blockchain anchoring + revocation lifecycle',
   'ZK-proof-native architecture trajectory',
-  'Role-based auth + API key security layers',
-  'Cross-service auditability and release gates',
+  'Role-scoped authz + API key controls',
+  'Cross-service release gating and auditability',
 ];
 
 const digilockerCompatibility = [
-  'Credential data structures designed for document-backed issuance workflows.',
-  'Server integration hooks already present for DigiLocker credential ingestion.',
-  'Consent-aware claim and verification pipelines fit India-first compliance contexts.',
-  'Can be deployed as DigiLocker-compatible issuance + verification rails for institutions.',
+  'Document-backed issuance workflows can be mapped cleanly into credential templates.',
+  'Existing integration hooks support DigiLocker-aligned ingestion and verification flows.',
+  'Consent and compliance pathways are designed for India-first deployment contexts.',
+  'CredVerse can act as a Web2 ↔ Web3 trust bridge for institutions and hiring networks.',
 ];
 
 const roadmap = [
   {
-    phase: 'Phase 1 (Now)',
-    title: 'Credibility Layer + Core Products',
+    phase: 'Phase 1 (Live)',
+    title: 'Core trust layer shipped',
     details:
-      'Issuer, Wallet, Recruiter, and Gateway are operational with hardened backend gates and Sepolia anchoring.',
-    status: 'Live',
+      'Issuer, Wallet, Recruiter, and Gateway are operational with hardened backend quality gates.',
   },
   {
     phase: 'Phase 2',
-    title: 'Institutional Rollout + DigiLocker Integrations',
+    title: 'Institution + DigiLocker integrations',
     details:
-      'Production deployment for universities and partner ecosystems with enterprise integrations.',
-    status: 'In Progress',
+      'Deploy institution-grade onboarding, policy controls, and partner rails for production use.',
   },
   {
     phase: 'Phase 3',
-    title: 'Advanced ZK Verification Network',
+    title: 'Advanced ZK verification fabric',
     details:
-      'Move from deterministic proof adapters to deeper production-grade ZK backends and federation patterns.',
-    status: 'Next',
+      'Extend from deterministic adapters into deeper production proving and federation layers.',
   },
 ];
 
-const teamCards = [
-  {
-    title: 'Founder & Product Vision',
-    description: 'Strategy, ecosystem partnerships, and market positioning for Web3 credential adoption.',
-    icon: Rocket,
-  },
-  {
-    title: 'Protocol & Backend Engineering',
-    description: 'DID/VC flows, anchoring logic, verification services, and security hardening.',
-    icon: Blocks,
-  },
-  {
-    title: 'Institution & Ecosystem Partnerships',
-    description: 'University onboarding, recruiter collaborations, and compliance-aligned rollout.',
-    icon: Landmark,
-  },
-];
-
-const partnerStrip = ['W3C VC', 'Ethereum Sepolia', 'DigiLocker Compatible', 'OID4VCI/OID4VP', 'ZK-Ready'];
+const partnerStrip = ['W3C VC', 'Ethereum Sepolia', 'DigiLocker Compatible', 'OID4VCI', 'OID4VP', 'ZK-Ready'];
 
 function App() {
   const [form, setForm] = useState({
@@ -159,8 +140,8 @@ function App() {
 
   return (
     <div className="site-shell" id="top">
-      <div className="ambient ambient-a" />
-      <div className="ambient ambient-b" />
+      <div className="mesh mesh-a" />
+      <div className="mesh mesh-b" />
 
       <header className="top-nav">
         <div className="brand">
@@ -169,102 +150,130 @@ function App() {
           </div>
           <span>CredVerse</span>
         </div>
+
         <div className="nav-links">
           <a href="#ecosystem">Ecosystem</a>
           <a href="#digilocker">DigiLocker</a>
           <a href="#roadmap">Roadmap</a>
           <a href="#contact">Contact</a>
         </div>
+
         <a className="nav-cta" href={PORTAL_URLS.issuer} target="_blank" rel="noreferrer">
           Open Platform
         </a>
       </header>
 
       <main className="content-wrap">
-        <motion.section
-          className="hero"
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.45 }}
-        >
-          <div className="hero-badge">
-            <Sparkles size={14} />
-            <span>Web3 Credential Infrastructure</span>
-          </div>
+        <section className="hero">
+          <motion.div
+            initial={{ opacity: 0, y: 18 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5 }}
+            className="hero-copy"
+          >
+            <div className="hero-badge">
+              <Sparkles size={14} />
+              <span>Professional Web3 Credential Infrastructure</span>
+            </div>
 
-          <h1>
-            The trust layer for digital credentials.
-            <br />
-            <span>Issue. Hold. Verify. Scale.</span>
-          </h1>
+            <h1>
+              A trust-grade credential ecosystem.
+              <br />
+              <span>Built for institutions. Ready for scale.</span>
+            </h1>
 
-          <p>
-            CredVerse is an end-to-end ecosystem for institutions, users, and recruiters — built on
-            W3C DID/VC standards, blockchain proof anchoring, and a DigiLocker-compatible rollout path.
-          </p>
+            <p>
+              CredVerse unifies issuance, holder experience, and recruiter verification into a
+              standards-aligned stack — with blockchain anchoring, compliance-aware workflows, and
+              DigiLocker-compatible integration pathways.
+            </p>
 
-          <div className="hero-actions">
-            <a className="btn-primary" href="#ecosystem">
-              Explore Ecosystem <ArrowRight size={16} />
-            </a>
-            <a
-              className="btn-ghost"
-              href="https://github.com/ragahv05-maker/credity"
-              target="_blank"
-              rel="noreferrer"
+            <div className="hero-actions">
+              <a className="btn-primary" href="#ecosystem">
+                Explore Products <ArrowRight size={16} />
+              </a>
+              <a className="btn-ghost" href="https://github.com/ragahv05-maker/credity" target="_blank" rel="noreferrer">
+                View Codebase
+              </a>
+            </div>
+          </motion.div>
+
+          <motion.div
+            className="hero-visual"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.08 }}
+          >
+            <ArchitecturePulse />
+            <div className="hero-visual-note">
+              <Radar size={14} />
+              <span>Live positioning for demos, partnerships, and institutional pitches</span>
+            </div>
+          </motion.div>
+        </section>
+
+        <section className="metric-grid" aria-label="key-metrics">
+          {metrics.map((metric, index) => (
+            <motion.article
+              key={metric.label}
+              initial={{ opacity: 0, y: 14 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, margin: '-80px' }}
+              transition={{ duration: 0.3, delay: index * 0.06 }}
+              className="metric-card"
             >
-              View GitHub
-            </a>
-          </div>
+              <strong>
+                <CountUp end={metric.end} duration={1.2} suffix={metric.suffix} enableScrollSpy scrollSpyOnce />
+              </strong>
+              <span>{metric.label}</span>
+            </motion.article>
+          ))}
+        </section>
 
-          <div className="stat-grid">
-            {metrics.map((metric) => (
-              <div key={metric.label}>
-                <strong>{metric.value}</strong>
-                <span>{metric.label}</span>
+        <section className="ticker-wrap" aria-label="compatibility-strip">
+          <Marquee gradient={false} speed={36} pauseOnHover>
+            {partnerStrip.map((item) => (
+              <div key={item} className="ticker-pill">
+                {item}
               </div>
             ))}
-          </div>
-        </motion.section>
-
-        <section className="partner-strip" aria-label="compatibility">
-          {partnerStrip.map((item) => (
-            <span key={item}>{item}</span>
-          ))}
+          </Marquee>
         </section>
 
         <section className="section" id="ecosystem">
           <div className="section-head">
-            <h2>Full Ecosystem</h2>
-            <p>Showcase-ready product suite for institutions and Web3 communities.</p>
+            <h2>Ecosystem Products</h2>
+            <p>Interactive, presentation-ready modules you can show to clients and Web3 communities.</p>
           </div>
 
           <div className="card-grid">
             {ecosystemCards.map((card, index) => {
               const Icon = card.icon;
+
               return (
-                <motion.article
-                  key={card.title}
-                  className="product-card"
-                  initial={{ opacity: 0, y: 14 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true, margin: '-80px' }}
-                  transition={{ delay: index * 0.05, duration: 0.28 }}
-                >
-                  <div className="card-head">
-                    <div className="card-icon">
-                      <Icon size={18} />
+                <Tilt key={card.title} glareEnable glareMaxOpacity={0.08} tiltMaxAngleX={5} tiltMaxAngleY={5}>
+                  <motion.article
+                    className="product-card"
+                    initial={{ opacity: 0, y: 14 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true, margin: '-80px' }}
+                    transition={{ duration: 0.3, delay: index * 0.05 }}
+                  >
+                    <div className="card-head">
+                      <div className="card-icon">
+                        <Icon size={18} />
+                      </div>
+                      <div>
+                        <h3>{card.title}</h3>
+                        <small>{card.subtitle}</small>
+                      </div>
                     </div>
-                    <div>
-                      <h3>{card.title}</h3>
-                      <small>{card.subtitle}</small>
-                    </div>
-                  </div>
-                  <p>{card.description}</p>
-                  <a href={card.href} target="_blank" rel="noreferrer">
-                    Visit <ArrowRight size={14} />
-                  </a>
-                </motion.article>
+                    <p>{card.description}</p>
+                    <a href={card.href} target="_blank" rel="noreferrer">
+                      Open <ArrowRight size={14} />
+                    </a>
+                  </motion.article>
+                </Tilt>
               );
             })}
           </div>
@@ -272,9 +281,10 @@ function App() {
 
         <section className="section" id="capabilities">
           <div className="section-head">
-            <h2>Core Capabilities</h2>
-            <p>Production-grade backend capabilities presented in a clean public narrative.</p>
+            <h2>Capability Surface</h2>
+            <p>Enterprise-friendly language with technical depth behind the scenes.</p>
           </div>
+
           <div className="pill-wrap">
             {capabilities.map((item) => (
               <div className="cap-pill" key={item}>
@@ -288,17 +298,17 @@ function App() {
         <section className="section" id="digilocker">
           <div className="section-head">
             <h2>DigiLocker Compatibility</h2>
-            <p>India-first interoperability story ready for institutional conversations.</p>
+            <p>Purpose-fit messaging for India-focused institutional deployment conversations.</p>
           </div>
 
           <article className="focus-card">
             <div className="focus-head">
               <div className="focus-icon">
-                <Link2 size={18} />
+                <BookCheck size={18} />
               </div>
               <div>
-                <h3>DigiLocker-ready integration path</h3>
-                <small>Position CredVerse as Web2 ↔ Web3 trust bridge</small>
+                <h3>DigiLocker-aligned by architecture</h3>
+                <small>Positioned as a practical bridge between existing records and Web3 trust rails</small>
               </div>
             </div>
             <ul>
@@ -315,7 +325,7 @@ function App() {
         <section className="section" id="roadmap">
           <div className="section-head">
             <h2>Roadmap</h2>
-            <p>Clear execution narrative for demos, investor calls, and partner discussions.</p>
+            <p>A sharp plan you can present to stakeholders without sounding generic.</p>
           </div>
 
           <div className="timeline">
@@ -329,38 +339,15 @@ function App() {
                   <h3>{item.title}</h3>
                   <p>{item.details}</p>
                 </div>
-                <span className="timeline-status">{item.status}</span>
               </article>
             ))}
           </div>
         </section>
 
-        <section className="section" id="team">
-          <div className="section-head">
-            <h2>Team & Advisors</h2>
-            <p>Foundational blocks you can present now, expandable with real advisor profiles.</p>
-          </div>
-
-          <div className="highlight-grid">
-            {teamCards.map((card) => {
-              const Icon = card.icon;
-              return (
-                <article key={card.title} className="highlight-card">
-                  <div className="highlight-icon">
-                    <Icon size={18} />
-                  </div>
-                  <h3>{card.title}</h3>
-                  <p>{card.description}</p>
-                </article>
-              );
-            })}
-          </div>
-        </section>
-
         <section className="section" id="contact">
           <div className="section-head">
-            <h2>Request Demo / Partnership Call</h2>
-            <p>Use this section directly when sharing with institutions or ecosystem partners.</p>
+            <h2>Request Demo</h2>
+            <p>Capture inbound interest directly from your website.</p>
           </div>
 
           <div className="contact-grid">
@@ -370,8 +357,8 @@ function App() {
                   <Mail size={18} />
                 </div>
                 <div>
-                  <h3>Demo Request Form</h3>
-                  <small>Submits through your configured email route</small>
+                  <h3>Demo / Partnership Form</h3>
+                  <small>Routes via email (configurable)</small>
                 </div>
               </div>
 
@@ -396,14 +383,14 @@ function App() {
                   onChange={(e) => setForm((p) => ({ ...p, organization: e.target.value }))}
                 />
                 <textarea
-                  placeholder="Use case / what you want to verify"
-                  required
                   rows={4}
+                  placeholder="What do you want to verify / issue?"
+                  required
                   value={form.message}
                   onChange={(e) => setForm((p) => ({ ...p, message: e.target.value }))}
                 />
                 <button type="submit">
-                  Send Demo Request <ArrowRight size={14} />
+                  Send Request <ArrowRight size={14} />
                 </button>
               </form>
             </article>
@@ -414,8 +401,8 @@ function App() {
                   <Workflow size={18} />
                 </div>
                 <div>
-                  <h3>Deploy & Demo Links</h3>
-                  <small>Everything needed to present quickly</small>
+                  <h3>Live Portal Links</h3>
+                  <small>Use for instant demo transitions</small>
                 </div>
               </div>
 
@@ -429,13 +416,13 @@ function App() {
                 Recruiter Portal <ArrowRight size={14} />
               </a>
               <a href="https://github.com/ragahv05-maker/credity" target="_blank" rel="noreferrer">
-                Codebase / Build Proof <ArrowRight size={14} />
+                Technical Proofs <ArrowRight size={14} />
               </a>
 
               <div className="note">
                 <Lock size={14} />
                 <span>
-                  Set <code>VITE_DEMO_EMAIL</code> in deployment env to route demo requests to your active inbox.
+                  Set <code>VITE_DEMO_EMAIL</code> in deploy env to route requests to your inbox.
                 </span>
               </div>
             </article>
@@ -443,21 +430,91 @@ function App() {
         </section>
 
         <section className="section final-cta">
-          <h2>CredVerse is now presentation-ready.</h2>
+          <h2>CredVerse is now built to impress — and convert.</h2>
           <p>
-            Share this website as your official Web3 credential project surface while backend hardening and
-            enterprise integrations continue in parallel.
+            Polished product narrative, distinctive interaction design, and real platform links in one
+            professional public surface.
           </p>
           <div className="hero-actions">
             <a className="btn-primary" href={PORTAL_URLS.recruiter} target="_blank" rel="noreferrer">
-              Open Live Demo <Zap size={15} />
+              Launch Live Demo <ArrowRight size={15} />
             </a>
-            <a className="btn-ghost" href="#contact">
-              Book a Demo Call
+            <a className="btn-ghost" href={PORTAL_URLS.wallet} target="_blank" rel="noreferrer">
+              Open Wallet Experience
             </a>
           </div>
         </section>
       </main>
+    </div>
+  );
+}
+
+function ArchitecturePulse() {
+  return (
+    <div className="architecture-card" role="img" aria-label="CredVerse architecture pulse visualization">
+      <svg viewBox="0 0 360 220" className="architecture-svg" fill="none">
+        <motion.path
+          d="M40 170 C 120 120, 160 80, 320 52"
+          stroke="url(#lineA)"
+          strokeWidth="2"
+          strokeLinecap="round"
+          initial={{ pathLength: 0.1, opacity: 0.2 }}
+          animate={{ pathLength: 1, opacity: 1 }}
+          transition={{ duration: 2.4, repeat: Infinity, repeatType: 'mirror' }}
+        />
+        <motion.path
+          d="M32 64 C 120 96, 214 150, 332 176"
+          stroke="url(#lineB)"
+          strokeWidth="2"
+          strokeLinecap="round"
+          initial={{ pathLength: 0.08, opacity: 0.2 }}
+          animate={{ pathLength: 1, opacity: 1 }}
+          transition={{ duration: 2.8, repeat: Infinity, repeatType: 'mirror', delay: 0.3 }}
+        />
+
+        {[
+          { x: 44, y: 170, label: 'Issuer' },
+          { x: 146, y: 110, label: 'Wallet' },
+          { x: 320, y: 52, label: 'Verifier' },
+          { x: 332, y: 176, label: 'Gateway' },
+        ].map((node, idx) => (
+          <g key={node.label}>
+            <motion.circle
+              cx={node.x}
+              cy={node.y}
+              r="7"
+              fill="#7cc4ff"
+              animate={{ scale: [1, 1.2, 1] }}
+              transition={{ duration: 2.2, repeat: Infinity, delay: idx * 0.22 }}
+            />
+            <text x={node.x + 11} y={node.y + 4} className="node-label">
+              {node.label}
+            </text>
+          </g>
+        ))}
+
+        <defs>
+          <linearGradient id="lineA" x1="40" y1="170" x2="320" y2="52" gradientUnits="userSpaceOnUse">
+            <stop stopColor="#69A3FF" />
+            <stop offset="1" stopColor="#5FF3D6" />
+          </linearGradient>
+          <linearGradient id="lineB" x1="32" y1="64" x2="332" y2="176" gradientUnits="userSpaceOnUse">
+            <stop stopColor="#5FF3D6" />
+            <stop offset="1" stopColor="#69A3FF" />
+          </linearGradient>
+        </defs>
+      </svg>
+
+      <div className="architecture-legends">
+        <div>
+          <Blocks size={14} />
+          <span>Credential graph</span>
+        </div>
+        <div>
+          <Landmark size={14} />
+          <span>Institution ready</span>
+        </div>
+      </div>
     </div>
   );
 }
