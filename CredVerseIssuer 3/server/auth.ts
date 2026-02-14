@@ -6,6 +6,33 @@ import { verifyAccessToken } from "@credverse/shared-auth";
 const rateLimitMap = new Map<string, { count: number; lastReset: number }>();
 const RATE_LIMIT_WINDOW = 60 * 1000; // 1 minute
 const RATE_LIMIT_MAX = 1000; // 1000 requests per minute
+const RATE_LIMIT_TRACKED_KEYS_MAX = 10_000;
+
+function pruneRateLimitMap(now: number): void {
+    if (rateLimitMap.size < RATE_LIMIT_TRACKED_KEYS_MAX) {
+        return;
+    }
+
+    for (const [key, value] of rateLimitMap.entries()) {
+        if (now - value.lastReset > RATE_LIMIT_WINDOW) {
+            rateLimitMap.delete(key);
+        }
+    }
+
+    if (rateLimitMap.size < RATE_LIMIT_TRACKED_KEYS_MAX) {
+        return;
+    }
+
+    const overflow = rateLimitMap.size - RATE_LIMIT_TRACKED_KEYS_MAX + 1;
+    let removed = 0;
+    for (const key of rateLimitMap.keys()) {
+        rateLimitMap.delete(key);
+        removed += 1;
+        if (removed >= overflow) {
+            break;
+        }
+    }
+}
 
 function readOptionalString(value: unknown): string | undefined {
     return typeof value === "string" && value.trim().length > 0 ? value : undefined;
@@ -27,6 +54,7 @@ async function resolveApiKeyTenant(keyHeader: string): Promise<{ tenantId: strin
 
 function enforceApiRateLimit(keyHash: string): { allowed: boolean; error?: string } {
     const now = Date.now();
+    pruneRateLimitMap(now);
     const limitData = rateLimitMap.get(keyHash) || { count: 0, lastReset: now };
 
     if (now - limitData.lastReset > RATE_LIMIT_WINDOW) {

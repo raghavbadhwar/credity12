@@ -1,13 +1,25 @@
 import { Router } from "express";
 import { storage } from "../storage";
 import { insertUserSchema } from "@shared/schema";
+import { authMiddleware } from "../services/auth-service";
 
 const router = Router();
 
+function resolveUserId(req: { user?: { userId?: number } }): number | null {
+    const userId = req.user?.userId;
+    if (typeof userId !== "number" || !Number.isInteger(userId) || userId <= 0) {
+        return null;
+    }
+    return userId;
+}
+
 // Get current user profile
-router.get("/user", async (req, res) => {
-    // TODO: Get userId from session/auth
-    const userId = 1;
+router.get("/user", authMiddleware, async (req, res) => {
+    const userId = resolveUserId(req);
+    if (!userId) {
+        return res.status(401).json({ message: "Unauthorized" });
+    }
+
     const user = await storage.getUser(userId);
 
     if (!user) {
@@ -18,10 +30,12 @@ router.get("/user", async (req, res) => {
 });
 
 // Update user profile
-router.patch("/user", async (req, res) => {
+router.patch("/user", authMiddleware, async (req, res) => {
     try {
-        // TODO: Get userId from session/auth
-        const userId = 1;
+        const userId = resolveUserId(req);
+        if (!userId) {
+            return res.status(401).json({ message: "Unauthorized" });
+        }
 
         const parseResult = insertUserSchema.partial().safeParse(req.body);
 
@@ -31,15 +45,18 @@ router.patch("/user", async (req, res) => {
 
         const updatedUser = await storage.updateUser(userId, parseResult.data);
         res.json(updatedUser);
-    } catch (error) {
+    } catch (_error) {
         res.status(500).json({ message: "Internal Server Error" });
     }
 });
 
 // Get user activity
-router.get("/activity", async (req, res) => {
-    // TODO: Get userId from session/auth
-    const userId = 1;
+router.get("/activity", authMiddleware, async (req, res) => {
+    const userId = resolveUserId(req);
+    if (!userId) {
+        return res.status(401).json({ message: "Unauthorized" });
+    }
+
     const activities = await storage.listActivities(userId);
     res.json(activities);
 });
