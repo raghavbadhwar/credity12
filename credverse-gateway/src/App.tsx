@@ -104,6 +104,29 @@ const architecture = [
   },
 ] as const;
 
+const audienceTracks = [
+  {
+    title: 'Institution Track',
+    subtitle: 'credibility-first sequencing',
+    points: [
+      'Outcome-led hero + trust strip for fast governance confidence.',
+      'Research/project evidence before narrative claims.',
+      'Security/compliance posture clearly surfaced before rollout CTA.',
+    ],
+    cta: 'Request institution pilot architecture',
+  },
+  {
+    title: 'Recruiter Track',
+    subtitle: 'speed-to-signal sequencing',
+    points: [
+      'Role-fit headline with measurable impact metrics above the fold.',
+      'Case-study evidence with proof links instead of generic claims.',
+      'Low-friction CTA for hiring teams to verify candidate trust quickly.',
+    ],
+    cta: 'Book recruiter verification demo',
+  },
+] as const;
+
 const digilockerBullets = [
   'Maps official institution record semantics into VC-ready payload contracts.',
   'Supports consent-aware verification exchanges required in regulated deployments.',
@@ -153,6 +176,7 @@ function App() {
         <nav>
           <a href="#platform">Platform</a>
           <a href="#architecture">Architecture</a>
+          <a href="#audience">Audience</a>
           <a href="#evidence">Evidence</a>
           <a href="#contact">Contact</a>
         </nav>
@@ -338,6 +362,45 @@ function App() {
                 </motion.article>
               );
             })}
+          </motion.div>
+        </section>
+
+        <section className="section" id="audience">
+          <div className="section-head">
+            <h2>Conversion Tracks by Audience</h2>
+            <p>Two tailored flows so institutions and hiring teams both see immediate relevance.</p>
+          </div>
+
+          <motion.div
+            className="audience-grid"
+            initial="hidden"
+            animate="show"
+            variants={{ hidden: {}, show: { transition: { staggerChildren: 0.1, delayChildren: 0.34 } } }}
+          >
+            {audienceTracks.map((track, index) => (
+              <motion.article className="audience-card" variants={fadeUp} key={track.title}>
+                <div className="audience-head">
+                  <span>0{index + 1}</span>
+                  <div>
+                    <h3>{track.title}</h3>
+                    <small>{track.subtitle}</small>
+                  </div>
+                </div>
+
+                <ul>
+                  {track.points.map((point) => (
+                    <li key={point}>
+                      <Check size={13} />
+                      <span>{point}</span>
+                    </li>
+                  ))}
+                </ul>
+
+                <a href="#contact">
+                  {track.cta} <ArrowUpRight size={14} />
+                </a>
+              </motion.article>
+            ))}
           </motion.div>
         </section>
 
