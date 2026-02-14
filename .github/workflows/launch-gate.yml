@@ -1,0 +1,55 @@
+name: launch-gate
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'docs/gates/**'
+      - 'docs/runbooks/**'
+      - 'docs/compliance/**'
+      - 'scripts/launch-gate-check.mjs'
+      - '.github/workflows/launch-gate.yml'
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Launch gate docs/config checks (non-strict)
+        run: node scripts/launch-gate-check.mjs
+
+  evidence-pack:
+    needs: gate
+    if: ${{ always() && !cancelled() }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Build launch gate evidence summary
+        run: |
+          mkdir -p ci-evidence
+          cat > ci-evidence/launch-gate-evidence.md <<EOF
+          # Launch Gate CI Evidence
+
+          - Workflow: ${GITHUB_WORKFLOW}
+          - Run ID: ${GITHUB_RUN_ID}
+          - Repository: ${GITHUB_REPOSITORY}
+          - Ref: ${GITHUB_REF}
+          - Commit: ${GITHUB_SHA}
+          - Run URL: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}
+
+          ## Job result
+
+          - gate: ${{ needs.gate.result }}
+
+          ## Release board mapping
+
+          - P0-03 Cross-service quality gates pass (launch gate portion)
+          EOF
+      - name: Upload launch gate evidence artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: launch-gate-evidence-${{ github.run_id }}
+          path: ci-evidence/launch-gate-evidence.md
+          if-no-files-found: error

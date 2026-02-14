@@ -1,0 +1,183 @@
+openapi: 3.0.0
+info:
+  title: CredVerse Issuer API
+  description: API for issuing and verifying Verifiable Credentials
+  version: 1.0.0
+servers:
+  - url: http://localhost:5001/api/v1
+    description: Local Development Server
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+security:
+  - bearerAuth: []
+
+paths:
+  /public/registry/issuers/did/{did}:
+    get:
+      summary: Get Issuer by DID
+      description: Retrieve public issuer profile using Decentralized Identifier
+      security: []
+      parameters:
+        - name: did
+          in: path
+          required: true
+          schema:
+            type: string
+          description: The DID of the issuer (e.g. did:web:credverse.io)
+      responses:
+        '200':
+          description: Issuer Profile
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: 
+                    type: string
+                  name: 
+                    type: string
+                  did:
+                    type: string
+                  trustStatus:
+                    type: string
+                    enum: [trusted, verified, unknown, revoked]
+        '404':
+          description: Issuer not found
+
+  /public/registry/issuers/{id}:
+    get:
+      summary: Get Issuer by ID
+      security: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Issuer details
+
+  /public/issuance/offer/consume:
+    get:
+      summary: Consume Credential Offer
+      security: []
+      parameters:
+        - name: token
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Returns the Credential and VC-JWT
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  credential:
+                    type: object
+                  vcJwt:
+                    type: string
+
+  /auth/register:
+    post:
+      summary: Register User
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                username:
+                  type: string
+                password:
+                  type: string
+                email:
+                  type: string
+                role: 
+                  type: string
+      responses:
+        '201':
+          description: User created
+
+  /auth/login:
+    post:
+      summary: Login
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                username:
+                  type: string
+                password:
+                  type: string
+      responses:
+        '200':
+          description: JWT Tokens
+
+  /issuance/credentials/issue:
+    post:
+      summary: Issue Credential
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                templateId:
+                  type: number
+                issuerId:
+                  type: number
+                recipient:
+                  type: object
+                  properties:
+                    id: 
+                      type: string
+                    name:
+                      type: string
+                    email:
+                      type: string
+                credentialData:
+                  type: object
+      responses:
+        '201':
+          description: Credential Created
+
+  /issuance/credentials/{id}/offer:
+    post:
+      summary: Create Credential Offer
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: number
+      responses:
+        '200':
+          description: Offer Link and QR Data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  offerToken:
+                    type: string
+                  offerUrl:
+                    type: string
+                  deepLink:
+                    type: string

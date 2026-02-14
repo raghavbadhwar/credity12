@@ -1,0 +1,23 @@
+export const colors = {
+  bg: '#FFFFFF',
+  card: '#F9FAFB',
+  elevated: '#FFFFFF',
+  text: '#0F172A',
+  muted: '#6B7280',
+  border: '#E5E7EB',
+  primary: '#2563EB',
+  success: '#10B981',
+  warning: '#F59E0B',
+  danger: '#EF4444',
+  holder: '#10B981',
+  issuer: '#2563EB',
+  recruiter: '#F59E0B',
+  tier: {
+    unverified: '#9CA3AF',
+    bronze: '#CD7F32',
+    silver: '#C0C0C0',
+    gold: '#FFD700',
+    platinum: '#E5E4E2',
+    diamond: '#B9F2FF',
+  },
+};

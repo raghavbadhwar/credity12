@@ -1,0 +1,10 @@
+[build]
+builder = "nixpacks"
+buildCommand = "cd ../packages/shared-auth && npm install && npm run build && cd ../../'CredVerseIssuer 3' && npm install --legacy-peer-deps && npm run build"
+
+[deploy]
+startCommand = "npm run start"
+healthcheckPath = "/api/health"
+healthcheckTimeout = 100
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 3

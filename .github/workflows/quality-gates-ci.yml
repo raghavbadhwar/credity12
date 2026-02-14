@@ -1,0 +1,276 @@
+name: quality-gates-ci
+
+on:
+  pull_request:
+    paths:
+      - 'package.json'
+      - 'package-lock.json'
+      - 'BlockWalletDigi/**'
+      - 'CredVerseIssuer 3/**'
+      - 'CredVerseRecruiter/**'
+      - 'credverse-gateway/**'
+      - 'apps/mobile/**'
+      - 'packages/shared-auth/**'
+      - '.github/workflows/quality-gates-ci.yml'
+  push:
+    branches: [main, master]
+    paths:
+      - 'package.json'
+      - 'package-lock.json'
+      - 'BlockWalletDigi/**'
+      - 'CredVerseIssuer 3/**'
+      - 'CredVerseRecruiter/**'
+      - 'credverse-gateway/**'
+      - 'apps/mobile/**'
+      - 'packages/shared-auth/**'
+      - '.github/workflows/quality-gates-ci.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: quality-gates-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      quality: ${{ steps.filter.outputs.quality }}
+      contracts: ${{ steps.filter.outputs.contracts }}
+      wallet: ${{ steps.filter.outputs.wallet }}
+      issuer: ${{ steps.filter.outputs.issuer }}
+      recruiter: ${{ steps.filter.outputs.recruiter }}
+      gateway: ${{ steps.filter.outputs.gateway }}
+      mobile: ${{ steps.filter.outputs.mobile }}
+      shared_auth: ${{ steps.filter.outputs.shared_auth }}
+      root: ${{ steps.filter.outputs.root }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            quality:
+              - 'package.json'
+              - 'package-lock.json'
+              - 'BlockWalletDigi/**'
+              - 'CredVerseIssuer 3/**'
+              - 'CredVerseRecruiter/**'
+              - 'credverse-gateway/**'
+              - 'apps/mobile/**'
+              - 'packages/shared-auth/**'
+            contracts:
+              - 'CredVerseIssuer 3/contracts/**'
+            wallet:
+              - 'BlockWalletDigi/**'
+            issuer:
+              - 'CredVerseIssuer 3/**'
+              - '!CredVerseIssuer 3/contracts/**'
+            recruiter:
+              - 'CredVerseRecruiter/**'
+            gateway:
+              - 'credverse-gateway/**'
+            mobile:
+              - 'apps/mobile/**'
+            shared_auth:
+              - 'packages/shared-auth/**'
+            root:
+              - 'package.json'
+              - 'package-lock.json'
+
+  check:
+    needs: changes
+    if: needs.changes.outputs.quality == 'true' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - key: shared_auth
+            path: packages/shared-auth
+            lockfile: packages/shared-auth/package-lock.json
+            command: npm run build
+          - key: wallet
+            path: BlockWalletDigi
+            lockfile: BlockWalletDigi/package-lock.json
+            command: npm run check
+          - key: issuer
+            path: CredVerseIssuer 3
+            lockfile: CredVerseIssuer 3/package-lock.json
+            command: npm run check
+          - key: recruiter
+            path: CredVerseRecruiter
+            lockfile: CredVerseRecruiter/package-lock.json
+            command: npm run check
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: ${{ matrix.lockfile }}
+      - name: Install dependencies
+        if: needs.changes.outputs[matrix.key] == 'true' || github.event_name == 'workflow_dispatch'
+        working-directory: ${{ matrix.path }}
+        run: npm ci
+      - name: Type/build check gate
+        if: needs.changes.outputs[matrix.key] == 'true' || github.event_name == 'workflow_dispatch'
+        working-directory: ${{ matrix.path }}
+        run: ${{ matrix.command }}
+
+  test:
+    needs: changes
+    if: needs.changes.outputs.quality == 'true' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - key: wallet
+            path: BlockWalletDigi
+            lockfile: BlockWalletDigi/package-lock.json
+            command: npm test
+          - key: issuer
+            path: CredVerseIssuer 3
+            lockfile: CredVerseIssuer 3/package-lock.json
+            command: npm test
+          - key: recruiter
+            path: CredVerseRecruiter
+            lockfile: CredVerseRecruiter/package-lock.json
+            command: npm test
+          - key: gateway
+            path: credverse-gateway
+            lockfile: credverse-gateway/package-lock.json
+            command: npm run test:proxy
+          - key: mobile
+            path: apps/mobile
+            lockfile: apps/mobile/package-lock.json
+            command: npm test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: ${{ matrix.lockfile }}
+      - name: Install dependencies
+        if: needs.changes.outputs[matrix.key] == 'true' || github.event_name == 'workflow_dispatch'
+        working-directory: ${{ matrix.path }}
+        run: npm ci
+      - name: Test gate
+        if: needs.changes.outputs[matrix.key] == 'true' || github.event_name == 'workflow_dispatch'
+        working-directory: ${{ matrix.path }}
+        run: ${{ matrix.command }}
+
+  contracts-security:
+    needs: changes
+    if: needs.changes.outputs.contracts == 'true' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: CredVerseIssuer 3/contracts
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: CredVerseIssuer 3/contracts/package-lock.json
+      - run: npm ci
+      - name: Solidity static analysis, compile, and contract tests
+        run: npm run analyze:static
+
+  dependency-security:
+    needs: changes
+    if: needs.changes.outputs.quality == 'true' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - key: root
+            path: .
+            lockfile: package-lock.json
+          - key: shared_auth
+            path: packages/shared-auth
+            lockfile: packages/shared-auth/package-lock.json
+          - key: wallet
+            path: BlockWalletDigi
+            lockfile: BlockWalletDigi/package-lock.json
+          - key: issuer
+            path: CredVerseIssuer 3
+            lockfile: CredVerseIssuer 3/package-lock.json
+          - key: recruiter
+            path: CredVerseRecruiter
+            lockfile: CredVerseRecruiter/package-lock.json
+          - key: gateway
+            path: credverse-gateway
+            lockfile: credverse-gateway/package-lock.json
+          - key: mobile
+            path: apps/mobile
+            lockfile: apps/mobile/package-lock.json
+          - key: contracts
+            path: CredVerseIssuer 3/contracts
+            lockfile: CredVerseIssuer 3/contracts/package-lock.json
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: ${{ matrix.lockfile }}
+      - name: Install dependencies
+        if: needs.changes.outputs[matrix.key] == 'true' || github.event_name == 'workflow_dispatch'
+        working-directory: ${{ matrix.path }}
+        run: npm ci
+      - name: High/Critical dependency vulnerability gate
+        if: needs.changes.outputs[matrix.key] == 'true' || github.event_name == 'workflow_dispatch'
+        working-directory: ${{ matrix.path }}
+        run: npm audit --omit=dev --audit-level=high
+
+  evidence-pack:
+    needs: [changes, check, test, contracts-security, dependency-security]
+    if: ${{ always() && !cancelled() && (needs.changes.outputs.quality == 'true' || github.event_name == 'workflow_dispatch') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Build CI evidence summary
+        run: |
+          mkdir -p ci-evidence
+          cat > ci-evidence/quality-gates-evidence.md <<EOF
+          # Quality Gates CI Evidence
+
+          - Workflow: ${GITHUB_WORKFLOW}
+          - Run ID: ${GITHUB_RUN_ID}
+          - Run Number: ${GITHUB_RUN_NUMBER}
+          - Repository: ${GITHUB_REPOSITORY}
+          - Ref: ${GITHUB_REF}
+          - Commit: ${GITHUB_SHA}
+          - Trigger: ${GITHUB_EVENT_NAME}
+          - Run URL: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}
+
+          ## Job results
+
+          - changes: ${{ needs.changes.result }}
+          - check: ${{ needs.check.result }}
+          - test: ${{ needs.test.result }}
+          - contracts-security: ${{ needs['contracts-security'].result }}
+          - dependency-security: ${{ needs['dependency-security'].result }}
+
+          ## Release board mapping
+
+          - P0-03 Cross-service quality gates pass: check + test + launch gate (see run URL)
+          - P0-04 CI release workflow validation: quality-gates-ci run status (this artifact)
+          - P0-05 Security high/critical sweep: contracts-security + dependency-security
+          EOF
+      - name: Upload CI evidence artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: quality-gates-evidence-${{ github.run_id }}
+          path: ci-evidence/quality-gates-evidence.md
+          if-no-files-found: error

@@ -1,0 +1,68 @@
+name: contract-security-ci
+
+permissions:
+  contents: read
+
+concurrency:
+  group: contracts-security-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+on:
+  pull_request:
+    paths:
+      - 'CredVerseIssuer 3/contracts/**'
+      - '.github/workflows/contract-security-ci.yml'
+  push:
+    branches: [ main, master ]
+    paths:
+      - 'CredVerseIssuer 3/contracts/**'
+
+jobs:
+  contract-security:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: CredVerseIssuer 3/contracts
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: 'CredVerseIssuer 3/contracts/package-lock.json'
+      - run: npm ci
+      - run: npm run analyze:static
+
+  evidence-pack:
+    needs: contract-security
+    if: ${{ always() && !cancelled() }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Build contract CI evidence summary
+        run: |
+          mkdir -p ci-evidence
+          cat > ci-evidence/contract-security-evidence.md <<EOF
+          # Contract Security CI Evidence
+
+          - Workflow: ${GITHUB_WORKFLOW}
+          - Run ID: ${GITHUB_RUN_ID}
+          - Repository: ${GITHUB_REPOSITORY}
+          - Ref: ${GITHUB_REF}
+          - Commit: ${GITHUB_SHA}
+          - Run URL: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}
+
+          ## Job result
+
+          - contract-security: ${{ needs['contract-security'].result }}
+
+          ## Release board mapping
+
+          - P0-05 Security high/critical sweep (contract static analysis)
+          EOF
+      - name: Upload contract CI evidence artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: contract-security-evidence-${{ github.run_id }}
+          path: ci-evidence/contract-security-evidence.md
+          if-no-files-found: error
