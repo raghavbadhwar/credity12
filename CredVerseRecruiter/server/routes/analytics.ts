@@ -60,7 +60,7 @@ router.get('/verifications/stats', async (req, res) => {
                 ? Math.round(history.reduce((sum, r) => sum + r.fraudScore, 0) / history.length)
                 : 0,
             recommendations: {
-                approve: history.filter(r => r.recommendation === 'approve').length,
+                approve: history.filter(r => r.recommendation === 'approve' || r.recommendation === 'accept').length,
                 review: history.filter(r => r.recommendation === 'review').length,
                 reject: history.filter(r => r.recommendation === 'reject').length,
             },

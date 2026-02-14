@@ -30,11 +30,29 @@ interface VerificationResult {
   verificationId: string;
 }
 
+type FraudFlag =
+  | string
+  | {
+    type?: string;
+    severity?: string;
+    description?: string;
+    message?: string;
+  };
+
 interface FraudAnalysis {
   score: number;
-  flags: { type: string; severity: string; description: string }[];
-  recommendation: 'approve' | 'review' | 'reject';
-  details: { check: string; result: string; impact: number }[];
+  ruleScore?: number;
+  aiScore?: number;
+  flags: FraudFlag[];
+  recommendation: 'accept' | 'approve' | 'review' | 'reject';
+  details: { check: string; status?: string; message?: string; result?: string; impact?: number }[];
+  ai?: {
+    provider: string;
+    score: number;
+    confidence: number;
+    summary: string;
+    signals: Array<{ code: string; severity: string; message: string }>;
+  };
 }
 
 interface VerificationRecord {
@@ -388,9 +406,11 @@ export default function InstantVerify() {
                             <div className="space-y-1">
                               <p className="text-xs text-muted-foreground uppercase font-semibold">Recommendation</p>
                               <Badge className={
-                                record.recommendation === 'approve' ? 'bg-emerald-100 text-emerald-700' :
-                                  record.recommendation === 'review' ? 'bg-amber-100 text-amber-700' :
-                                    'bg-red-100 text-red-700'
+                                record.recommendation === 'approve' || record.recommendation === 'accept'
+                                  ? 'bg-emerald-100 text-emerald-700'
+                                  : record.recommendation === 'review'
+                                    ? 'bg-amber-100 text-amber-700'
+                                    : 'bg-red-100 text-red-700'
                               }>
                                 {record.recommendation.toUpperCase()}
                               </Badge>
@@ -436,19 +456,41 @@ export default function InstantVerify() {
                         )}
 
                         {/* Fraud Analysis */}
-                        {fraudAnalysis && fraudAnalysis.flags.length > 0 && (
+                        {fraudAnalysis && (
                           <div className="space-y-3">
                             <p className="text-xs font-semibold text-muted-foreground uppercase">
                               Fraud Analysis (Score: {fraudAnalysis.score}/100)
+                              {typeof fraudAnalysis.ruleScore === 'number' && typeof fraudAnalysis.aiScore === 'number'
+                                ? ` · Rules ${fraudAnalysis.ruleScore} / AI ${fraudAnalysis.aiScore}`
+                                : ''}
                             </p>
-                            <div className="space-y-2">
-                              {fraudAnalysis.flags.map((flag, i) => (
-                                <div key={i} className="p-2 bg-red-50 border border-red-100 rounded text-sm">
-                                  <span className="font-medium text-red-700">{flag.type}:</span>{' '}
-                                  <span className="text-red-600">{flag.description}</span>
-                                </div>
-                              ))}
-                            </div>
+                            {fraudAnalysis.ai && (
+                              <div className="p-3 bg-blue-50 border border-blue-100 rounded text-sm space-y-1">
+                                <p className="font-medium text-blue-800">
+                                  AI Copilot ({fraudAnalysis.ai.provider}) · Confidence {Math.round(fraudAnalysis.ai.confidence * 100)}%
+                                </p>
+                                <p className="text-blue-700">{fraudAnalysis.ai.summary}</p>
+                              </div>
+                            )}
+                            {fraudAnalysis.flags.length > 0 && (
+                              <div className="space-y-2">
+                                {fraudAnalysis.flags.map((flag, i) => {
+                                  const normalized =
+                                    typeof flag === 'string'
+                                      ? { type: flag, description: flag.replace(/_/g, ' ') }
+                                      : {
+                                        type: flag.type || 'RISK_SIGNAL',
+                                        description: flag.description || flag.message || flag.type || 'Risk signal',
+                                      };
+                                  return (
+                                    <div key={i} className="p-2 bg-red-50 border border-red-100 rounded text-sm">
+                                      <span className="font-medium text-red-700">{normalized.type}:</span>{' '}
+                                      <span className="text-red-600">{normalized.description}</span>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
                           </div>
                         )}
 
