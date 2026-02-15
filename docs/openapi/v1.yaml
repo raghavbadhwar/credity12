@@ -1,0 +1,1341 @@
+openapi: 3.1.0
+info:
+  title: Credity API
+  version: 1.1.0
+  description: |
+    Credity standards-aligned API surface for issuance, presentation, verification,
+    status, and asynchronous anchoring.
+  x-contract-freeze-date: 2026-02-12
+  x-deprecation-policy:
+    notice_period_days: 90
+    sunset_header_required: true
+    communication_channels:
+      - changelog
+      - dashboard-banner
+      - email
+servers:
+  - url: https://api.credity.in
+  - url: http://localhost:5001
+    description: Issuer local service
+  - url: http://localhost:5003
+    description: Recruiter local service
+tags:
+  - name: issuer-oid4vci
+  - name: recruiter-oid4vp
+  - name: verification
+  - name: status
+  - name: anchoring
+  - name: queue
+  - name: compliance
+  - name: reputation
+  - name: proofs
+paths:
+  /.well-known/openid-credential-issuer:
+    get:
+      tags: [issuer-oid4vci]
+      summary: OID4VCI issuer metadata
+      responses:
+        "200":
+          description: Metadata response
+
+  /v1/oid4vci/credential-offers:
+    post:
+      tags: [issuer-oid4vci]
+      summary: Create pre-authorized credential offer
+      security:
+        - ApiKeyAuth: []
+        - BearerAuth: []
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [templateId, issuerId, recipient, credentialData]
+              properties:
+                templateId:
+                  type: string
+                issuerId:
+                  type: string
+                recipient:
+                  type: object
+                  additionalProperties: true
+                credentialData:
+                  type: object
+                  additionalProperties: true
+                format:
+                  type: string
+                  enum: [sd-jwt-vc, vc+jwt]
+      responses:
+        "201":
+          description: Offer created
+
+  /v1/oid4vci/token:
+    post:
+      tags: [issuer-oid4vci]
+      summary: Exchange pre-authorized code for access token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [grant_type, pre-authorized_code]
+              properties:
+                grant_type:
+                  type: string
+                pre-authorized_code:
+                  type: string
+      responses:
+        "200":
+          description: Access token issued
+
+  /v1/oid4vci/credential:
+    post:
+      tags: [issuer-oid4vci]
+      summary: Issue credential for authorized wallet
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Credential issued
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  format:
+                    type: string
+                  credential:
+                    type: string
+                  credential_id:
+                    type: string
+
+  /v1/oid4vci/deferred:
+    post:
+      tags: [issuer-oid4vci]
+      summary: Poll deferred issuance state
+      responses:
+        "202":
+          description: Deferred issuance pending
+
+  /v1/oid4vp/requests:
+    post:
+      tags: [recruiter-oid4vp]
+      summary: Create verifier presentation request
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema:
+            type: string
+      responses:
+        "201":
+          description: VP request created
+
+  /v1/oid4vp/responses:
+    post:
+      tags: [recruiter-oid4vp]
+      summary: Submit holder presentation response
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: VP response processed
+
+  /v1/proofs/generate:
+    post:
+      tags: [proofs]
+      summary: Generate ZK/selective-disclosure proof (issuer side contract)
+      security:
+        - ApiKeyAuth: []
+        - BearerAuth: []
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProofGenerationRequestContract'
+      responses:
+        "202":
+          description: Proof generation accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProofGenerationResultContract'
+
+  /v1/proofs/verify:
+    post:
+      tags: [proofs]
+      summary: Verify ZK/selective-disclosure proof (verifier side contract)
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProofVerificationRequestContract'
+      responses:
+        "200":
+          description: Proof verification result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProofVerificationResultContract'
+
+  /v1/proofs/revocation-witness/{credentialId}:
+    get:
+      tags: [proofs]
+      summary: Resolve revocation witness bundle for proof verification
+      parameters:
+        - name: credentialId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Revocation witness
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RevocationWitnessContract'
+
+  /v1/verifications/instant:
+    post:
+      tags: [verification]
+      summary: Instant credential verification
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Verification result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VerificationResultContract'
+
+  /v1/verifications/bulk:
+    post:
+      tags: [verification]
+      summary: Bulk credential verification
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Bulk verification result
+
+  /v1/verifications/{id}:
+    get:
+      tags: [verification]
+      summary: Get verification result
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Verification record
+        "404":
+          description: Not found
+
+  /v1/status/bitstring/{listId}:
+    get:
+      tags: [status]
+      summary: Get bitstring status list
+      parameters:
+        - name: listId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Status list
+
+  /v1/credentials/{id}/revoke:
+    post:
+      tags: [status]
+      summary: Revoke credential
+      security:
+        - ApiKeyAuth: []
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Revoked
+
+  /v1/anchors/batches:
+    post:
+      tags: [anchoring]
+      summary: Create and submit anchor batch
+      security:
+        - ApiKeyAuth: []
+        - BearerAuth: []
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema:
+            type: string
+      responses:
+        "202":
+          description: Batch accepted
+
+  /v1/anchors/batches/{batchId}:
+    get:
+      tags: [anchoring]
+      summary: Get anchor batch status
+      parameters:
+        - name: batchId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Batch status
+  /v1/anchors/batches/{batchId}/replay:
+    post:
+      tags: [anchoring]
+      summary: Replay a failed anchor batch
+      security:
+        - ApiKeyAuth: []
+        - BearerAuth: []
+      parameters:
+        - name: batchId
+          in: path
+          required: true
+          schema:
+            type: string
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema:
+            type: string
+      responses:
+        "202":
+          description: Replay accepted
+        "404":
+          description: Batch not found
+
+  /v1/anchors/dead-letter:
+    get:
+      tags: [anchoring]
+      summary: List failed anchor batches pending replay
+      security:
+        - ApiKeyAuth: []
+        - BearerAuth: []
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+      responses:
+        "200":
+          description: Dead-letter entries
+
+  /v1/anchors/proofs/{credentialId}:
+    get:
+      tags: [anchoring]
+      summary: Get Merkle proof for credential
+      parameters:
+        - name: credentialId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Proof
+
+  /v1/queue/stats:
+    get:
+      tags: [queue]
+      summary: Get queue runtime stats
+      security:
+        - ApiKeyAuth: []
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Queue statistics
+        "503":
+          description: Queue unavailable
+
+  /v1/queue/dead-letter:
+    get:
+      tags: [queue]
+      summary: List dead-letter queue entries
+      security:
+        - ApiKeyAuth: []
+        - BearerAuth: []
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+      responses:
+        "200":
+          description: Dead-letter entries
+        "503":
+          description: Queue unavailable
+
+  /v1/queue/dead-letter/{entryId}/replay:
+    post:
+      tags: [queue]
+      summary: Replay a dead-letter queue entry
+      security:
+        - ApiKeyAuth: []
+        - BearerAuth: []
+      parameters:
+        - name: entryId
+          in: path
+          required: true
+          schema:
+            type: string
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema:
+            type: string
+      responses:
+        "202":
+          description: Replay accepted
+        "404":
+          description: Dead-letter entry not found
+        "503":
+          description: Queue unavailable
+
+  /v1/compliance/consents:
+    get:
+      tags: [compliance]
+      summary: List consent grants
+      security:
+        - ApiKeyAuth: []
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Consent grants
+    post:
+      tags: [compliance]
+      summary: Create consent grant
+      security:
+        - ApiKeyAuth: []
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConsentGrantContract'
+      responses:
+        "201":
+          description: Consent grant created
+
+  /v1/compliance/consents/{consentId}/revoke:
+    post:
+      tags: [compliance]
+      summary: Revoke consent grant
+      security:
+        - ApiKeyAuth: []
+        - BearerAuth: []
+      parameters:
+        - name: consentId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Consent revoked
+        "404":
+          description: Consent not found
+
+  /v1/compliance/data-requests:
+    get:
+      tags: [compliance]
+      summary: List data export/delete requests
+      security:
+        - ApiKeyAuth: []
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Data request list
+
+  /v1/compliance/data-requests/export:
+    post:
+      tags: [compliance]
+      summary: Submit data export request
+      security:
+        - ApiKeyAuth: []
+        - BearerAuth: []
+      responses:
+        "202":
+          description: Data export request accepted
+
+  /v1/compliance/data-requests/delete:
+    post:
+      tags: [compliance]
+      summary: Submit data deletion request
+      security:
+        - ApiKeyAuth: []
+        - BearerAuth: []
+      responses:
+        "202":
+          description: Data delete request accepted
+
+  /v1/compliance/certin/incidents:
+    get:
+      tags: [compliance]
+      summary: List CERT-In incident records
+      security:
+        - ApiKeyAuth: []
+        - BearerAuth: []
+      responses:
+        "200":
+          description: CERT-In incidents
+    post:
+      tags: [compliance]
+      summary: Create CERT-In incident record
+      security:
+        - ApiKeyAuth: []
+        - BearerAuth: []
+      responses:
+        "201":
+          description: Incident created
+
+  /v1/compliance/audit-log/export:
+    get:
+      tags: [compliance]
+      summary: Export immutable audit log
+      security:
+        - ApiKeyAuth: []
+        - BearerAuth: []
+      parameters:
+        - name: format
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [json, ndjson]
+      responses:
+        "200":
+          description: Audit log export
+
+  /v1/reputation/events:
+    get:
+      tags: [reputation]
+      summary: List reputation rail events for a user
+      parameters:
+        - name: userId
+          in: query
+          required: false
+          schema:
+            type: integer
+        - name: subjectDid
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: category
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [transport, accommodation, delivery, employment, finance, social, identity]
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+      responses:
+        "200":
+          description: Reputation event list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  count:
+                    type: integer
+                  events:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ReputationEventContract'
+    post:
+      tags: [reputation]
+      summary: Ingest a platform-signed reputation event
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [user_id, platform_id, category, signal_type, score]
+              properties:
+                event_id:
+                  type: string
+                user_id:
+                  type: integer
+                platform_id:
+                  type: string
+                category:
+                  type: string
+                  enum: [transport, accommodation, delivery, employment, finance, social, identity]
+                signal_type:
+                  type: string
+                score:
+                  type: number
+                  minimum: 0
+                  maximum: 100
+                occurred_at:
+                  type: string
+                  format: date-time
+                metadata:
+                  type: object
+                  additionalProperties: true
+      responses:
+        "201":
+          description: Event accepted
+        "200":
+          description: Duplicate (idempotent replay)
+
+  /v1/reputation/score:
+    get:
+      tags: [reputation]
+      summary: Get reputation rail score (0-1000)
+      parameters:
+        - name: userId
+          in: query
+          required: false
+          schema:
+            type: integer
+        - name: subjectDid
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Reputation score snapshot
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  reputation:
+                    $ref: '#/components/schemas/ReputationScoreContract'
+
+  /v1/reputation/safedate:
+    get:
+      tags: [reputation]
+      summary: Get SafeDate score (0-100)
+      parameters:
+        - name: userId
+          in: query
+          required: false
+          schema:
+            type: integer
+        - name: subjectDid
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: SafeDate score snapshot
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  safe_date:
+                    $ref: '#/components/schemas/SafeDateScoreContract'
+
+  /v1/reputation/events/{id}:
+    get:
+      tags: [reputation]
+      summary: Get reputation rail event by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Reputation event
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  event:
+                    $ref: '#/components/schemas/ReputationEventContract'
+        "404":
+          description: Event not found
+
+  /v1/reputation/profiles/{subjectDid}:
+    get:
+      tags: [reputation]
+      summary: Get reputation profile for subject DID
+      parameters:
+        - name: subjectDid
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Reputation profile
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  profile:
+                    $ref: '#/components/schemas/ReputationProfileContract'
+
+  /v1/reputation/scores/{subjectDid}:
+    get:
+      tags: [reputation]
+      summary: Get reputation scores for subject DID
+      parameters:
+        - name: subjectDid
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Reputation scores
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  scores:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ReputationScoreContract'
+
+  /v1/reputation/share-grants:
+    post:
+      tags: [reputation]
+      summary: Create reputation share grant
+      security:
+        - ApiKeyAuth: []
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [subject_did, grantee_id, purpose, expires_at]
+              properties:
+                subject_did:
+                  type: string
+                grantee_id:
+                  type: string
+                purpose:
+                  type: string
+                data_elements:
+                  type: array
+                  items:
+                    type: string
+                expires_at:
+                  type: string
+                  format: date-time
+      responses:
+        "201":
+          description: Share grant created
+
+  /v1/reputation/share-grants/{id}/revoke:
+    post:
+      tags: [reputation]
+      summary: Revoke reputation share grant
+      security:
+        - ApiKeyAuth: []
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Share grant revoked
+        "404":
+          description: Share grant not found
+
+  /v1/reputation/scores/recompute:
+    post:
+      tags: [reputation]
+      summary: Recompute reputation score (admin)
+      security:
+        - ApiKeyAuth: []
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [subject_did]
+              properties:
+                subject_did:
+                  type: string
+                vertical:
+                  type: string
+      responses:
+        "200":
+          description: Reputation score recomputed
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    CredentialRecordContract:
+      type: object
+      required:
+        - id
+        - format
+        - issuer_did
+        - subject_did
+        - issuance_flow
+      properties:
+        id:
+          type: string
+        format:
+          type: string
+          enum: [sd-jwt-vc, vc+jwt, vc+ldp]
+        issuer_did:
+          type: string
+        subject_did:
+          type: string
+        status_list_id:
+          type: [string, 'null']
+        status_list_index:
+          type: [integer, 'null']
+        anchor_batch_id:
+          type: [string, 'null']
+        anchor_proof:
+          type: [object, 'null']
+          additionalProperties: true
+        holder_binding:
+          type: [object, 'null']
+          additionalProperties: true
+        issuance_flow:
+          type: string
+          enum: [oid4vci, legacy]
+
+    ProofGenerationRequestContract:
+      type: object
+      required: [format]
+      properties:
+        credential_id:
+          type: string
+        format:
+          type: string
+          enum: [sd-jwt-vc, jwt_vp, ldp_vp, merkle-membership]
+        proof_purpose:
+          type: string
+          enum: [authentication, assertionMethod]
+        challenge:
+          type: string
+        domain:
+          type: string
+        subject_did:
+          type: string
+        disclosure_frame:
+          type: object
+          additionalProperties: true
+        nonce:
+          type: string
+        metadata:
+          type: object
+          additionalProperties: true
+
+    ProofGenerationResultContract:
+      type: object
+      required: [id, status, format, proof, created_at]
+      properties:
+        id:
+          type: string
+        status:
+          type: string
+          enum: [generated, queued, unsupported, failed]
+        format:
+          type: string
+          enum: [sd-jwt-vc, jwt_vp, ldp_vp, merkle-membership]
+        proof:
+          oneOf:
+            - type: string
+            - type: object
+              additionalProperties: true
+            - type: 'null'
+        public_signals:
+          type: [object, 'null']
+          additionalProperties: true
+        credential_id:
+          type: [string, 'null']
+        created_at:
+          type: string
+          format: date-time
+        reason:
+          type: string
+
+    RevocationWitnessContract:
+      type: object
+      required: [credential_id, revoked]
+      properties:
+        credential_id:
+          type: string
+        revoked:
+          type: boolean
+        status_list:
+          type: [object, 'null']
+          properties:
+            list_id:
+              type: string
+            index:
+              type: integer
+            revoked:
+              type: boolean
+            updated_at:
+              type: string
+              format: date-time
+        anchor_proof:
+          type: [object, 'null']
+          properties:
+            batch_id:
+              type: string
+            root:
+              type: string
+            proof:
+              type: array
+              items:
+                type: string
+
+    ProofVerificationRequestContract:
+      type: object
+      required: [format, proof]
+      properties:
+        format:
+          type: string
+          enum: [sd-jwt-vc, jwt_vp, ldp_vp, merkle-membership]
+        proof:
+          oneOf:
+            - type: string
+            - type: object
+              additionalProperties: true
+        challenge:
+          type: string
+        domain:
+          type: string
+        expected_issuer_did:
+          type: string
+        expected_subject_did:
+          type: string
+        expected_claims:
+          type: object
+          additionalProperties: true
+        revocation_witness:
+          $ref: '#/components/schemas/RevocationWitnessContract'
+
+    ProofVerificationResultContract:
+      type: object
+      required: [id, valid, decision, reason_codes, checked_at]
+      properties:
+        id:
+          type: string
+        valid:
+          type: boolean
+        decision:
+          type: string
+          enum: [approve, review, reject]
+        reason_codes:
+          type: array
+          items:
+            type: string
+        checked_at:
+          type: string
+          format: date-time
+        extracted_claims:
+          type: object
+          additionalProperties: true
+
+    VerificationResultContract:
+      type: object
+      required:
+        - id
+        - credential_validity
+        - status_validity
+        - anchor_validity
+        - fraud_score
+        - fraud_explanations
+        - decision
+        - decision_reason_codes
+      properties:
+        id:
+          type: string
+        credential_validity:
+          type: string
+          enum: [valid, invalid, unknown]
+        status_validity:
+          type: string
+          enum: [active, revoked, unknown]
+        anchor_validity:
+          type: string
+          enum: [anchored, pending, missing, unknown]
+        anchor_state:
+          type: string
+          enum: [queued, submitted, confirmed, failed, pending]
+        fraud_score:
+          type: number
+        fraud_explanations:
+          type: array
+          items:
+            type: string
+        decision:
+          type: string
+          enum: [approve, review, investigate, reject]
+        decision_reason_codes:
+          type: array
+          items:
+            type: string
+        checked_at:
+          type: string
+          format: date-time
+
+    TrustScoreSnapshotContract:
+      type: object
+      required:
+        - id
+        - user_id
+        - score
+        - signals_version
+        - features_hash
+        - model_version
+        - explanation_json
+        - created_at
+      properties:
+        id:
+          type: string
+        user_id:
+          type: string
+        score:
+          type: number
+        signals_version:
+          type: string
+        features_hash:
+          type: string
+        model_version:
+          type: string
+        explanation_json:
+          type: object
+          additionalProperties: true
+        decay_applied_at:
+          type: [string, 'null']
+        created_at:
+          type: string
+
+    ConsentGrantContract:
+      type: object
+      required:
+        - id
+        - subject_id
+        - verifier_id
+        - purpose
+        - data_elements
+        - expiry
+        - consent_proof
+      properties:
+        id:
+          type: string
+        subject_id:
+          type: string
+        verifier_id:
+          type: string
+        purpose:
+          type: string
+        data_elements:
+          type: array
+          items:
+            type: string
+        expiry:
+          type: string
+        revocation_ts:
+          type: [string, 'null']
+        consent_proof:
+          type: object
+          additionalProperties: true
+
+    ReputationEventContract:
+      type: object
+      required:
+        - id
+        - event_id
+        - user_id
+        - platform_id
+        - category
+        - signal_type
+        - score
+        - occurred_at
+        - created_at
+      properties:
+        id:
+          type: string
+        event_id:
+          type: string
+        user_id:
+          type: integer
+        platform_id:
+          type: string
+        category:
+          type: string
+          enum: [transport, accommodation, delivery, employment, finance, social, identity]
+        signal_type:
+          type: string
+        score:
+          type: number
+          minimum: 0
+          maximum: 100
+        occurred_at:
+          type: string
+          format: date-time
+        metadata:
+          type: object
+          additionalProperties: true
+        created_at:
+          type: string
+          format: date-time
+
+    ReputationCategoryBreakdownContract:
+      type: object
+      required:
+        - category
+        - weight
+        - score
+        - weighted_score
+        - event_count
+      properties:
+        category:
+          type: string
+          enum: [transport, accommodation, delivery, employment, finance, social, identity]
+        weight:
+          type: integer
+        score:
+          type: number
+        weighted_score:
+          type: number
+        event_count:
+          type: integer
+
+    ReputationScoreContract:
+      type: object
+      required:
+        - user_id
+        - score
+        - event_count
+        - category_breakdown
+        - computed_at
+      properties:
+        user_id:
+          type: integer
+        score:
+          type: integer
+          minimum: 0
+          maximum: 1000
+        event_count:
+          type: integer
+        category_breakdown:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReputationCategoryBreakdownContract'
+        computed_at:
+          type: string
+          format: date-time
+
+    SafeDateScoreContract:
+      type: object
+      required:
+        - user_id
+        - score
+        - breakdown
+        - computed_at
+        - reason_codes
+      properties:
+        user_id:
+          type: integer
+        score:
+          type: integer
+          minimum: 0
+          maximum: 100
+        breakdown:
+          type: object
+          required:
+            - identity_verified_points
+            - liveness_points
+            - background_clean_points
+            - cross_platform_reputation_points
+            - social_validation_points
+            - harassment_free_points
+          properties:
+            identity_verified_points:
+              type: integer
+            liveness_points:
+              type: integer
+            background_clean_points:
+              type: integer
+            cross_platform_reputation_points:
+              type: integer
+            social_validation_points:
+              type: integer
+            harassment_free_points:
+              type: integer
+        computed_at:
+          type: string
+          format: date-time
+        reason_codes:
+          type: array
+          items:
+            type: string
+
+    ReputationProfileContract:
+      type: object
+      required:
+        - subject_did
+        - scores
+      properties:
+        subject_did:
+          type: string
+        scores:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReputationScoreContract'
+        signals:
+          type: object
+          additionalProperties: true
+        signals_version:
+          type: string
+        computed_at:
+          type: string
+          format: date-time
+
+    PlatformAuthorityContract:
+      type: object
+      required:
+        - id
+        - platform_id
+        - name
+        - status
+        - allowed_verticals
+        - allowed_categories
+        - created_at
+      properties:
+        id:
+          type: string
+        platform_id:
+          type: string
+        tenant_id:
+          type: [string, 'null']
+        name:
+          type: string
+        domain:
+          type: [string, 'null']
+        status:
+          type: string
+          enum: [pending, active, suspended]
+        allowed_verticals:
+          type: array
+          items:
+            type: string
+        allowed_categories:
+          type: array
+          items:
+            type: string
+        created_at:
+          type: string
+          format: date-time
