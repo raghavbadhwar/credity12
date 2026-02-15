@@ -8,16 +8,17 @@ import {
 } from '@credverse/shared-auth';
 import { deterministicHash } from './proof-lifecycle';
 
-// CredentialRegistry ABI (simplified)
+// CredVerseRegistry ABI (aligned with contracts/contracts/CredVerseRegistry.sol)
+// Keep this intentionally minimal (only what our services call).
 const REGISTRY_ABI = [
-    "function anchorCredential(bytes32 _credentialHash) external",
-    "function revokeCredential(bytes32 _credentialHash, string calldata _reason) external",
-    "function verifyCredential(bytes32 _credentialHash) external view returns (bool isValid, address issuer, uint256 anchoredAt)",
+    "function anchorCredential(bytes32 _rootHash) external",
+    "function revokeCredential(bytes32 _credentialHash) external",
+    "function adminRevokeCredential(bytes32 _credentialHash) external",
     "function isRevoked(bytes32 _credentialHash) external view returns (bool)",
-    "function getCredential(bytes32 _credentialHash) external view returns (address issuer, uint256 anchoredAt, bool revoked, string memory revocationReason, uint256 revokedAt)",
-    "function getStats() external view returns (uint256 anchored, uint256 revoked)",
-    "event CredentialAnchored(bytes32 indexed credentialHash, address indexed issuer, uint256 timestamp)",
-    "event CredentialRevoked(bytes32 indexed credentialHash, address indexed revoker, string reason, uint256 timestamp)"
+    "function anchorExists(bytes32 _rootHash) external view returns (bool)",
+    "function isActiveIssuer(address _issuerAddress) external view returns (bool)",
+    "event AnchorSubmitted(bytes32 indexed rootHash, address indexed submitter, uint256 timestamp)",
+    "event CredentialRevoked(bytes32 indexed credentialHash, address indexed revoker, uint256 timestamp)",
 ];
 
 const DEFAULT_CONTRACT = process.env.REGISTRY_CONTRACT_ADDRESS || '';
@@ -237,10 +238,11 @@ export class BlockchainService {
         }
 
         try {
-            const tx = await this.contract.revokeCredential(credentialHash, reason);
+            // Contract does not store reason on-chain (we keep reason off-chain in evidence)
+            const tx = await this.contract.revokeCredential(credentialHash);
             const receipt = await tx.wait();
 
-            console.log(`[Blockchain] Revoked credential: ${credentialHash} on ${this.chain}`);
+            console.log(`[Blockchain] Revoked credential: ${credentialHash} in tx ${receipt.hash} on ${this.chain}`);
 
             return {
                 success: true,
@@ -270,9 +272,8 @@ export class BlockchainService {
         }
 
         try {
-            const [isValid, issuer, anchoredAt] = await this.contract.verifyCredential(credentialHash);
-
-            if (anchoredAt === BigInt(0)) {
+            const exists = await this.contract.anchorExists(credentialHash);
+            if (!exists) {
                 return { exists: false, isValid: false };
             }
 
@@ -281,8 +282,6 @@ export class BlockchainService {
             return {
                 exists: true,
                 isValid: !isRevoked,
-                issuer,
-                anchoredAt: Number(anchoredAt),
                 isRevoked,
             };
         } catch (error: any) {
@@ -296,49 +295,30 @@ export class BlockchainService {
      */
     async getCredentialDetails(credentialHash: string): Promise<any> {
         if (!this.isConfigured) {
-            return {
-                exists: false,
-            };
+            return { exists: false };
         }
 
         try {
-            const [issuer, anchoredAt, revoked, revocationReason, revokedAt] =
-                await this.contract.getCredential(credentialHash);
-
-            if (anchoredAt === BigInt(0)) {
+            const exists = await this.contract.anchorExists(credentialHash);
+            if (!exists) {
                 return { exists: false };
             }
-
+            const isRevoked = await this.contract.isRevoked(credentialHash);
             return {
                 exists: true,
-                issuer,
-                anchoredAt: new Date(Number(anchoredAt) * 1000),
-                isRevoked: revoked,
-                revocationReason,
-                revokedAt: revokedAt > BigInt(0) ? new Date(Number(revokedAt) * 1000) : null,
+                isRevoked,
             };
-        } catch (error) {
+        } catch {
             return { exists: false };
         }
     }
 
     /**
      * Get registry statistics
+     * NOTE: the on-chain contract does not expose counts; return zeros for now.
      */
     async getStats(): Promise<{ anchored: number; revoked: number }> {
-        if (!this.isConfigured) {
-            return { anchored: 0, revoked: 0 };
-        }
-
-        try {
-            const [anchored, revoked] = await this.contract.getStats();
-            return {
-                anchored: Number(anchored),
-                revoked: Number(revoked),
-            };
-        } catch (error) {
-            return { anchored: 0, revoked: 0 };
-        }
+        return { anchored: 0, revoked: 0 };
     }
 
     /**

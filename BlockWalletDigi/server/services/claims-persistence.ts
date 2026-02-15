@@ -15,6 +15,8 @@ export interface StoredClaimRecord {
   description: string;
   timeline: ClaimVerifyRequest['timeline'];
   evidenceIds: string[];
+  // Stored in API response shape (snake_case) for now.
+  evidenceLinks?: Array<Record<string, unknown>>;
   identityScore: number;
   integrityScore: number;
   authenticityScore: number;
