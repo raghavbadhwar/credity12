@@ -1,4 +1,4 @@
-import { FormEvent, useMemo, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import CountUp from 'react-countup';
 import {
@@ -17,6 +17,7 @@ import {
   Wallet,
 } from 'lucide-react';
 import './App.css';
+import './ops.css';
 
 const URLS = {
   issuer: import.meta.env.VITE_ISSUER_URL || 'http://localhost:5001',
@@ -143,7 +144,192 @@ const fadeUp = {
   },
 };
 
+type ProgressItem = {
+  id: string;
+  lane: string;
+  title: string;
+  workstream: string;
+  dri: string;
+  deputy: string;
+  priority: string;
+  rag: string;
+  dueIST: string;
+  dependencies: string;
+  status: string;
+  lastUpdatedIST: string;
+};
+
+type ProgressSnapshot = {
+  generatedAt: string;
+  summary: {
+    completionPct: number;
+    totals: {
+      byLane: Record<string, number>;
+      byPriority: Record<string, number>;
+      byRag: Record<string, number>;
+      byStatus: Record<string, number>;
+    };
+  };
+  items: ProgressItem[];
+};
+
+function OpsDashboard() {
+  const [data, setData] = useState<ProgressSnapshot | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [lane, setLane] = useState<string>('All');
+  const [priority, setPriority] = useState<string>('All');
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/progress/latest.json', { cache: 'no-store' })
+      .then(async (r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return (await r.json()) as ProgressSnapshot;
+      })
+      .then((json) => {
+        if (!cancelled) setData(json);
+      })
+      .catch((e) => {
+        if (!cancelled) setError(e?.message || 'Failed to load');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const filtered = useMemo(() => {
+    if (!data) return [] as ProgressItem[];
+    return data.items.filter((it) => {
+      const laneOk = lane === 'All' ? true : it.lane === lane;
+      const priOk = priority === 'All' ? true : it.priority === priority;
+      return laneOk && priOk;
+    });
+  }, [data, lane, priority]);
+
+  const lanes = useMemo(() => {
+    const set = new Set<string>(['All']);
+    data?.items.forEach((i) => set.add(i.lane));
+    return Array.from(set);
+  }, [data]);
+
+  const priorities = useMemo(() => {
+    const set = new Set<string>(['All']);
+    data?.items.forEach((i) => set.add(i.priority));
+    return Array.from(set);
+  }, [data]);
+
+  const kpi = (label: string, value: string, sub?: string) => (
+    <div className="kpi">
+      <div className="kpi-label">{label}</div>
+      <div className="kpi-value">{value}</div>
+      {sub ? <div className="kpi-sub">{sub}</div> : null}
+    </div>
+  );
+
+  return (
+    <div className="ops-shell">
+      <div className="ops-hero">
+        <div>
+          <div className="ops-eyebrow">Credity Command Center</div>
+          <h1 className="ops-title">Progress Dashboard</h1>
+          <p className="ops-subtitle">
+            One page you can trust: board status, P0 pressure, and what’s blocked.
+          </p>
+          <div className="ops-links">
+            <a className="ops-link" href={URLS.releaseBoard} target="_blank" rel="noreferrer">
+              Release Board <ExternalLink size={16} />
+            </a>
+            <a className="ops-link" href={URLS.ci} target="_blank" rel="noreferrer">
+              CI Runs <ExternalLink size={16} />
+            </a>
+            <a className="ops-link" href={URLS.repo} target="_blank" rel="noreferrer">
+              Repo <ExternalLink size={16} />
+            </a>
+            <a className="ops-link" href="/" >
+              Back to Site
+            </a>
+          </div>
+        </div>
+        <div className="ops-kpis">
+          {kpi('Overall completion', data ? `${data.summary.completionPct}%` : '—', data ? `Updated: ${new Date(data.generatedAt).toLocaleString()}` : undefined)}
+          {kpi('P0 count', data ? String(data.summary.totals.byPriority['P0'] || 0) : '—', 'Critical execution pressure')}
+          {kpi('Blocked', data ? String(data.summary.totals.byStatus['Blocked'] || 0) : '—', 'Explicit external dependencies')}
+          {kpi('Red (risk)', data ? String(data.summary.totals.byRag['Red'] || 0) : '—', 'High risk / merge-blockers')}
+        </div>
+      </div>
+
+      <div className="ops-panel">
+        <div className="ops-panel-head">
+          <div className="ops-panel-title">Board Items</div>
+          <div className="ops-filters">
+            <label>
+              Lane
+              <select value={lane} onChange={(e) => setLane(e.target.value)}>
+                {lanes.map((l) => (
+                  <option key={l} value={l}>
+                    {l}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Priority
+              <select value={priority} onChange={(e) => setPriority(e.target.value)}>
+                {priorities.map((p) => (
+                  <option key={p} value={p}>
+                    {p}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+        </div>
+
+        {error ? <div className="ops-error">Failed to load progress snapshot: {error}</div> : null}
+        {!data && !error ? <div className="ops-loading">Loading live board snapshot…</div> : null}
+
+        {data ? (
+          <div className="ops-table">
+            <div className="ops-row ops-row-head">
+              <div>ID</div>
+              <div>Lane</div>
+              <div>Priority</div>
+              <div>RAG</div>
+              <div>Status</div>
+              <div>Title</div>
+              <div>DRI</div>
+              <div>Due</div>
+            </div>
+            {filtered.map((it) => (
+              <div key={it.id} className={`ops-row rag-${it.rag.toLowerCase()} status-${it.status.toLowerCase().replace(/\s+/g, '-')}`}>
+                <div className="mono">{it.id}</div>
+                <div>{it.lane}</div>
+                <div className={`pill pri-${it.priority.toLowerCase()}`}>{it.priority}</div>
+                <div className={`pill rag-${it.rag.toLowerCase()}`}>{it.rag}</div>
+                <div className={`pill st-${it.status.toLowerCase().replace(/\s+/g, '-')}`}>{it.status}</div>
+                <div className="title">{it.title}</div>
+                <div>{it.dri}</div>
+                <div className="mono">{it.dueIST || '—'}</div>
+              </div>
+            ))}
+          </div>
+        ) : null}
+      </div>
+
+      <div className="ops-foot">
+        Data source: <span className="mono">swarm/reports/credity-s34-master-board.csv</span> → generated into{' '}
+        <span className="mono">/progress/latest.json</span>
+      </div>
+    </div>
+  );
+}
+
 function App() {
+  const path = typeof window !== 'undefined' ? window.location.pathname : '/';
+  if (path.startsWith('/ops') || path.startsWith('/progress')) {
+    return <OpsDashboard />;
+  }
+
   const [form, setForm] = useState({ name: '', email: '', org: '', message: '' });
 
   const mailHref = useMemo(() => {
@@ -178,6 +364,7 @@ function App() {
           <a href="#architecture">Architecture</a>
           <a href="#audience">Audience</a>
           <a href="#evidence">Evidence</a>
+          <a href="/ops">Ops</a>
           <a href="#contact">Contact</a>
         </nav>
 
