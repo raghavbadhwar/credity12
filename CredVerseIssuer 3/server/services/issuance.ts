@@ -87,13 +87,9 @@ export class IssuanceService {
         (credential as any).format = 'vc+jwt';
         (credential as any).issuanceFlow = 'legacy';
 
-        const anchorInput = {
-            id: credential.id,
-            issuer: vcPayload.iss,
-            subject: recipient.did || recipient.studentId,
-            data: credentialData,
-            issuedAt: new Date().toISOString(),
-        };
+        // IMPORTANT: The verifier computes deterministic hashes over the W3C VC object.
+        // Anchor the same canonical object on-chain so recruiter checks can match.
+        const anchorInput = vcPayload.vc;
         const anchorMode = (process.env.BLOCKCHAIN_ANCHOR_MODE || 'async').toLowerCase();
         if (anchorMode !== 'off') {
             const anchorTask = async () => {

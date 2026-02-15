@@ -689,16 +689,30 @@ export class VerificationEngine {
     /**
      * Hash credential for verification
      */
+    private normalizeCredentialForHash(credential: any): any {
+        const base = credential && typeof credential === 'object' && credential.vc && typeof credential.vc === 'object'
+            ? credential.vc
+            : credential;
+
+        if (!base || typeof base !== 'object') return base;
+
+        // Do not include proof container fields in the anchored hash.
+        // Proof metadata can include the hash itself, creating circularity.
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { proof, ...rest } = base as any;
+        return rest;
+    }
+
     private hashCredential(
         credential: any,
         algorithm: 'sha256' | 'keccak256' = 'sha256',
         canonicalization: 'RFC8785-V1' | 'JCS-LIKE-V1' = 'RFC8785-V1',
     ): string {
-        return deterministicHash(credential, algorithm, canonicalization);
+        return deterministicHash(this.normalizeCredentialForHash(credential), algorithm, canonicalization);
     }
 
     private hashCredentialLegacy(credential: any, algorithm: 'sha256' | 'keccak256' = 'sha256'): string {
-        return deterministicHashLegacyTopLevel(credential, algorithm);
+        return deterministicHashLegacyTopLevel(this.normalizeCredentialForHash(credential), algorithm);
     }
 
     /**
