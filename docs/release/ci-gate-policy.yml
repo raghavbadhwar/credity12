@@ -1,0 +1,31 @@
+version: 1
+name: credity-ci-gate-policy
+
+required_gates:
+  - id: lint-unit
+    description: Lint and unit tests must pass
+    block_on_fail: true
+  - id: sast-deps
+    description: SAST/dependency scan must pass threshold
+    block_on_fail: true
+  - id: container-iac-scan
+    description: Container and IaC scans must pass threshold
+    block_on_fail: true
+  - id: integration
+    description: Integration tests must pass
+    block_on_fail: true
+  - id: staging-smoke
+    description: Staging smoke tests must pass
+    block_on_fail: true
+  - id: release-approval
+    description: Manual approval required for production
+    block_on_fail: true
+
+security_thresholds:
+  critical: 0
+  high: 0
+  allow_waiver: true
+  waiver_requires:
+    - owner
+    - expiry
+    - compensating_controls
