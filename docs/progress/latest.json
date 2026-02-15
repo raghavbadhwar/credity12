@@ -1,0 +1,199 @@
+{
+  "generatedAt": "2026-02-15T13:58:19.049Z",
+  "source": {
+    "boardCsv": "swarm/reports/credity-s34-master-board.csv"
+  },
+  "summary": {
+    "totals": {
+      "byLane": {
+        "Now": 8,
+        "Next": 2,
+        "This Week": 2
+      },
+      "byPriority": {
+        "P0": 10,
+        "P1": 2
+      },
+      "byRag": {
+        "Amber": 9,
+        "Red": 3
+      },
+      "byStatus": {
+        "In Progress": 1,
+        "Queued": 9,
+        "Blocked": 2
+      }
+    },
+    "completionPct": 0
+  },
+  "items": [
+    {
+      "id": "CRD-001",
+      "lane": "Now",
+      "title": "Freeze 9+/10 quality scorecard + metric owners",
+      "workstream": "Program Command",
+      "dri": "PD",
+      "deputy": "PMO",
+      "priority": "P0",
+      "rag": "Amber",
+      "dueIST": "2026-02-15 13:00",
+      "dependencies": "",
+      "status": "In Progress",
+      "lastUpdatedIST": "2026-02-15 11:40"
+    },
+    {
+      "id": "CRD-002",
+      "lane": "Now",
+      "title": "Website narrative and hierarchy rebuild v2",
+      "workstream": "Product Funnel & UX",
+      "dri": "UX Lead",
+      "deputy": "Frontend Lead",
+      "priority": "P0",
+      "rag": "Amber",
+      "dueIST": "2026-02-15 16:00",
+      "dependencies": "CRD-001",
+      "status": "Queued",
+      "lastUpdatedIST": "2026-02-15 11:40"
+    },
+    {
+      "id": "CRD-003",
+      "lane": "Now",
+      "title": "Wallet golden flow friction pass (auth->claim->share->prove)",
+      "workstream": "Product Funnel & UX",
+      "dri": "Wallet Lead",
+      "deputy": "QA Lead",
+      "priority": "P0",
+      "rag": "Amber",
+      "dueIST": "2026-02-15 17:00",
+      "dependencies": "CRD-001",
+      "status": "Queued",
+      "lastUpdatedIST": "2026-02-15 11:40"
+    },
+    {
+      "id": "CRD-004",
+      "lane": "Now",
+      "title": "Recruiter decision clarity + reason-code UX revamp",
+      "workstream": "Product Funnel & UX",
+      "dri": "Recruiter Lead",
+      "deputy": "Content Lead",
+      "priority": "P0",
+      "rag": "Amber",
+      "dueIST": "2026-02-15 17:00",
+      "dependencies": "CRD-001",
+      "status": "Queued",
+      "lastUpdatedIST": "2026-02-15 11:40"
+    },
+    {
+      "id": "CRD-005",
+      "lane": "Now",
+      "title": "Issuer issuance form constraints and schema guidance",
+      "workstream": "Product Funnel & UX",
+      "dri": "Issuer Lead",
+      "deputy": "Backend Lead",
+      "priority": "P0",
+      "rag": "Amber",
+      "dueIST": "2026-02-15 18:00",
+      "dependencies": "CRD-001",
+      "status": "Queued",
+      "lastUpdatedIST": "2026-02-15 11:40"
+    },
+    {
+      "id": "CRD-006",
+      "lane": "Now",
+      "title": "Conformance + ZK correctness gates merge-blocking on latest head",
+      "workstream": "Policy/Compliance/Fairness",
+      "dri": "QA Lead",
+      "deputy": "Security Lead",
+      "priority": "P0",
+      "rag": "Red",
+      "dueIST": "2026-02-15 18:30",
+      "dependencies": "CRD-001",
+      "status": "Queued",
+      "lastUpdatedIST": "2026-02-15 11:40"
+    },
+    {
+      "id": "CRD-007",
+      "lane": "Now",
+      "title": "Telemetry baseline dashboard for core funnel + guardrails",
+      "workstream": "Experimentation & Analytics",
+      "dri": "Data Lead",
+      "deputy": "SRE Lead",
+      "priority": "P0",
+      "rag": "Amber",
+      "dueIST": "2026-02-15 19:00",
+      "dependencies": "CRD-001",
+      "status": "Queued",
+      "lastUpdatedIST": "2026-02-15 11:40"
+    },
+    {
+      "id": "CRD-008",
+      "lane": "Now",
+      "title": "Refresh release board and CI evidence on latest SHA",
+      "workstream": "Evidence Cell",
+      "dri": "Release Lead",
+      "deputy": "QA Lead",
+      "priority": "P0",
+      "rag": "Amber",
+      "dueIST": "2026-02-15 19:30",
+      "dependencies": "CRD-006",
+      "status": "Queued",
+      "lastUpdatedIST": "2026-02-15 11:40"
+    },
+    {
+      "id": "CRD-009",
+      "lane": "Next",
+      "title": "Secrets manager/OIDC production wiring",
+      "workstream": "Platform/SRE",
+      "dri": "SRE Lead",
+      "deputy": "Security Lead",
+      "priority": "P0",
+      "rag": "Red",
+      "dueIST": "Needs user access",
+      "dependencies": "CRD-008",
+      "status": "Blocked",
+      "lastUpdatedIST": "2026-02-15 11:40"
+    },
+    {
+      "id": "CRD-010",
+      "lane": "Next",
+      "title": "Permanent hosting/domain cutover + rollback rehearsal",
+      "workstream": "Platform/SRE",
+      "dri": "Release Lead",
+      "deputy": "SRE Lead",
+      "priority": "P0",
+      "rag": "Red",
+      "dueIST": "Needs user access",
+      "dependencies": "CRD-008/CRD-009",
+      "status": "Blocked",
+      "lastUpdatedIST": "2026-02-15 11:40"
+    },
+    {
+      "id": "CRD-011",
+      "lane": "This Week",
+      "title": "Lint debt burn-down for touched surfaces",
+      "workstream": "Platform/SRE",
+      "dri": "Eng Lead",
+      "deputy": "QA Lead",
+      "priority": "P1",
+      "rag": "Amber",
+      "dueIST": "2026-02-17 20:00",
+      "dependencies": "CRD-002/003/004/005",
+      "status": "Queued",
+      "lastUpdatedIST": "2026-02-15 11:40"
+    },
+    {
+      "id": "CRD-012",
+      "lane": "This Week",
+      "title": "Operational drill pack (restore + incident + canary)",
+      "workstream": "Ops Enablement",
+      "dri": "Ops Lead",
+      "deputy": "SRE Lead",
+      "priority": "P1",
+      "rag": "Amber",
+      "dueIST": "2026-02-18 20:00",
+      "dependencies": "CRD-009/010",
+      "status": "Queued",
+      "lastUpdatedIST": "2026-02-15 11:40"
+    }
+  ]
+}
