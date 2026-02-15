@@ -173,6 +173,11 @@ type ProgressSnapshot = {
   items: ProgressItem[];
 };
 
+const hashLink = (route: string) => {
+  const r = route.replace(/^\/+/, '');
+  return r ? `#/${r}` : '#/';
+};
+
 function OpsDashboard() {
   const [data, setData] = useState<ProgressSnapshot | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -245,7 +250,7 @@ function OpsDashboard() {
             <a className="ops-link" href={URLS.repo} target="_blank" rel="noreferrer">
               Repo <ExternalLink size={16} />
             </a>
-            <a className="ops-link" href="/" >
+            <a className="ops-link" href={hashLink('')}>
               Back to Site
             </a>
           </div>
@@ -326,9 +331,10 @@ function OpsDashboard() {
 
 function App() {
   const path = typeof window !== 'undefined' ? window.location.pathname : '/';
-  if (path.startsWith('/ops') || path.startsWith('/progress')) {
-    return <OpsDashboard />;
-  }
+  const hash = typeof window !== 'undefined' ? window.location.hash : '';
+  // Support hash-based routing for static hosts like GitHub Pages.
+  const opsRoute = hash.startsWith('#/ops') || path.endsWith('/ops') || path.startsWith('/ops');
+  if (opsRoute) return <OpsDashboard />;
 
   const [form, setForm] = useState({ name: '', email: '', org: '', message: '' });
 
@@ -364,7 +370,7 @@ function App() {
           <a href="#architecture">Architecture</a>
           <a href="#audience">Audience</a>
           <a href="#evidence">Evidence</a>
-          <a href="/ops">Ops</a>
+          <a href={hashLink('ops')}>Ops</a>
           <a href="#contact">Contact</a>
         </nav>
 

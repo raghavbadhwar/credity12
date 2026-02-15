@@ -1,0 +1,67 @@
+name: Deploy CredVerse Gateway (Ops Dashboard) to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'credverse-gateway/**'
+      - 'swarm/reports/credity-s34-master-board.csv'
+      - '.github/workflows/gateway-gh-pages.yml'
+      - 'scripts/progress-snapshot.mjs'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: 'pages'
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: |
+            credverse-gateway/package-lock.json
+
+      - name: Install gateway deps
+        working-directory: credverse-gateway
+        run: npm ci
+
+      - name: Generate progress snapshot
+        run: node scripts/progress-snapshot.mjs
+
+      - name: Build gateway (static)
+        working-directory: credverse-gateway
+        env:
+          GITHUB_PAGES: '1'
+        run: npm run build
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: credverse-gateway/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
