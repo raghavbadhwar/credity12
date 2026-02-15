@@ -33,6 +33,9 @@ export class IssuanceService {
 
         const issuer = await storage.getIssuer(issuerId);
         if (!issuer) throw new Error("Issuer not found");
+        if ((issuer as any).tenantId && (issuer as any).tenantId !== tenantId) {
+            throw new Error("Issuer does not belong to tenant");
+        }
 
         // Construct VC Payload following W3C VC Data Model
         const subjectDid = recipient.did || recipient.studentId;
@@ -103,6 +106,9 @@ export class IssuanceService {
                         blockNumber: anchorResult.blockNumber,
                         credentialHash: anchorResult.hash,
                     });
+                    (credential as any).txHash = anchorResult.txHash;
+                    (credential as any).blockNumber = anchorResult.blockNumber;
+                    (credential as any).credentialHash = anchorResult.hash;
                     return anchorResult;
                 }
 
@@ -165,6 +171,30 @@ export class IssuanceService {
             }
         }
 
+        // Attach non-sensitive audit metadata for downstream verifiers/recruiters.
+        // NOTE: This is additive and does not change the VC signature surface (stored vcJwt stays authoritative).
+        (credential as any).audit = {
+            issuance: {
+                mode: 'legacy',
+                issuedAt: vcPayload.vc.issuanceDate,
+                issuerDid,
+                subjectDid,
+                template: { id: templateId, name: template.name, version: template.version },
+            },
+            trust: {
+                issuerTrustStatus: (issuer as any).trustStatus ?? 'unknown',
+            },
+        };
+
+        const anchored = typeof (credential as any).txHash === 'string' && (credential as any).txHash.length > 0;
+        (credential as any).anchor = {
+            mode: anchorMode,
+            status: anchorMode === 'off' ? 'disabled' : anchored ? 'anchored' : 'pending',
+            txHash: (credential as any).txHash ?? null,
+            blockNumber: (credential as any).blockNumber ?? null,
+            credentialHash: (credential as any).credentialHash ?? null,
+        };
+
         // Log the issuance activity
         await storage.createActivityLog({
             tenantId,
@@ -175,7 +205,8 @@ export class IssuanceService {
                 credentialId: credential.id,
                 templateName: template.name,
                 recipientName: recipient.name,
-                webhookSent: !!recipient.webhookUrl
+                webhookSent: !!recipient.webhookUrl,
+                anchor: (credential as any).anchor,
             },
         });
 

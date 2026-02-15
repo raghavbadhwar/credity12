@@ -74,8 +74,14 @@ export default function Issuance() {
           }
         })
       });
-      if (!res.ok) throw new Error("Failed to issue credential");
-      return res.json();
+      const body = await res.json().catch(() => null);
+      if (!res.ok) {
+        const msg = body?.message || "Failed to issue credential";
+        const err: any = new Error(msg);
+        err.body = body;
+        throw err;
+      }
+      return body;
     },
     onSuccess: async (data) => {
       // Also add to local store for immediate UI update
@@ -102,11 +108,14 @@ export default function Issuance() {
           const offerData = await offerRes.json();
           await navigator.clipboard.writeText(offerData.offerUrl);
 
+          const anchorStatus = data?.anchor?.status || (data?.txHash ? 'anchored' : 'pending');
+          const tx = data?.anchor?.txHash || data?.txHash;
           toast({
-            title: "Credential Issued & Anchored ✓",
+            title: anchorStatus === 'anchored' ? "Credential Issued & Anchored" : "Credential Issued (Anchoring Pending)",
             description: (
               <div className="flex flex-col gap-2">
-                <span>TX: <code className="text-xs">{data.txHash?.slice(0, 12)}...</code></span>
+                <span className="text-xs text-muted-foreground">Trust/Audit: issuance is recorded; anchoring may complete asynchronously.</span>
+                <span>TX: <code className="text-xs">{tx ? `${String(tx).slice(0, 12)}...` : 'pending'}</code></span>
                 <div className="bg-muted p-2 rounded mt-1">
                   <p className="text-xs font-semibold mb-1">Wallet URL (copied!):</p>
                   <code className="text-xs break-all">{offerData.offerUrl}</code>
@@ -118,26 +127,44 @@ export default function Issuance() {
           });
         }
       } catch (e) {
+        const anchorStatus = data?.anchor?.status || (data?.txHash ? 'anchored' : 'pending');
         toast({
-          title: "Credential Issued & Anchored",
+          title: anchorStatus === 'anchored' ? "Credential Issued & Anchored" : "Credential Issued",
           description: (
             <div className="flex flex-col gap-1">
-              <span>Credential anchored to blockchain.</span>
+              <span className="text-sm">{anchorStatus === 'anchored' ? 'Credential anchored to blockchain.' : 'Credential created. Blockchain anchoring may be pending.'}</span>
               <span className="font-mono text-xs opacity-80">ID: {data.id}</span>
             </div>
           ),
-          duration: 5000,
+          duration: 6000,
         });
       }
 
       // Reset form partially
       setFormData(prev => ({ ...prev, name: "", email: "", studentId: "" }));
     },
-    onError: () => {
+    onError: (err: any) => {
+      const body = err?.body;
+      const code = body?.code;
+      const errors: any[] = Array.isArray(body?.errors) ? body.errors : [];
+      const detail = errors.length
+        ? errors.slice(0, 3).map((e) => `${e.path}: ${e.message}`).join("\n")
+        : (body?.message || err?.message || "There was an error issuing the credential.");
+
       toast({
-        title: "Issuance Failed",
-        description: "There was an error issuing the credential.",
-        variant: "destructive"
+        title: code ? `Issuance Failed (${code})` : "Issuance Failed",
+        description: (
+          <div className="whitespace-pre-line text-sm">
+            {detail}
+            {body?.schemaHint?.required?.length ? (
+              <div className="mt-2 text-xs text-muted-foreground">
+                Template required fields: {body.schemaHint.required.join(", ")}
+              </div>
+            ) : null}
+          </div>
+        ),
+        variant: "destructive",
+        duration: 12000,
       });
     }
   });

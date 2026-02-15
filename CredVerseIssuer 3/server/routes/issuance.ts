@@ -87,10 +87,49 @@ router.post("/credentials/issue", writeIdempotency, async (req, res) => {
         }
 
         const tenantId = (req as any).tenantId;
-        const { templateId, issuerId, recipient, credentialData } = req.body;
 
-        if (!templateId || !issuerId || !recipient || !credentialData) {
-            return res.status(400).json({ message: "Missing required fields" });
+        const { issuanceRequestSchema, normalizeRecipient, validateRecipient, validateCredentialDataAgainstTemplateSchema } = await import("../services/issuance-validation");
+        const parsed = issuanceRequestSchema.safeParse(req.body);
+        if (!parsed.success) {
+            return res.status(400).json({
+                message: "Issuance request failed validation",
+                code: "ISSUANCE_VALIDATION_FAILED",
+                errors: parsed.error.issues.map((i) => ({
+                    path: i.path.join("."),
+                    message: i.message,
+                })),
+            });
+        }
+
+        const { templateId, issuerId, credentialData } = parsed.data;
+        const recipient = normalizeRecipient(parsed.data.recipient);
+
+        const recipientErrors = validateRecipient(recipient);
+        if (recipientErrors.length > 0) {
+            return res.status(400).json({
+                message: "Recipient identity is incomplete",
+                code: "RECIPIENT_INVALID",
+                errors: recipientErrors,
+            });
+        }
+
+        // Preflight template schema guidance so the UI can help users recover.
+        const template = await storage.getTemplate(templateId);
+        if (!template) {
+            return res.status(404).json({ message: "Template not found", code: "TEMPLATE_NOT_FOUND" });
+        }
+        if ((template as any).tenantId && (template as any).tenantId !== tenantId) {
+            return res.status(403).json({ message: "Forbidden", code: "TEMPLATE_FORBIDDEN" });
+        }
+
+        const schemaCheck = validateCredentialDataAgainstTemplateSchema((template as any).schema, credentialData);
+        if (!schemaCheck.ok) {
+            return res.status(400).json({
+                message: "Credential data does not match template schema",
+                code: "CREDENTIAL_DATA_SCHEMA_MISMATCH",
+                errors: schemaCheck.errors,
+                schemaHint: schemaCheck.schemaHint,
+            });
         }
 
         const credential = await issuanceService.issueCredential(
@@ -101,7 +140,10 @@ router.post("/credentials/issue", writeIdempotency, async (req, res) => {
             credentialData
         );
 
-        res.status(201).json(credential);
+        res.status(201).json({
+            ...credential,
+            schemaHint: schemaCheck.schemaHint,
+        });
     } catch (error: any) {
         const message = error.message || "Internal Server Error";
         const status = message.includes("queue") || message.includes("REDIS_URL") ? 503 : 500;
