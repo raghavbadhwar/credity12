@@ -88,6 +88,18 @@ router.post('/verify', async (req: Request, res: Response) => {
         // Process the claim through 3-layer verification
         const result = await verifyClaim(request);
 
+
+        const evidenceLinks = request.evidence.map((item) =>
+            buildEvidenceLinkage({
+                url: item.url,
+                mediaType: item.type,
+                uploadedAt: item.uploadedAt,
+            })
+        );
+
+        // Persist as plain objects to satisfy storage typing contracts
+        const evidenceLinksRecords = evidenceLinks.map((link) => ({ ...link }));
+
         const nowIso = new Date().toISOString();
         await claimsPersistence.saveClaim({
             id: result.claimId,
@@ -98,6 +110,7 @@ router.post('/verify', async (req: Request, res: Response) => {
             description: request.description,
             timeline: request.timeline,
             evidenceIds: [],
+            evidenceLinks: evidenceLinksRecords,
             identityScore: result.breakdown.identityScore,
             integrityScore: result.breakdown.integrityScore,
             authenticityScore: result.breakdown.authenticityScore,
@@ -112,14 +125,6 @@ router.post('/verify', async (req: Request, res: Response) => {
             processedAt: nowIso,
         });
 
-        const evidence_links = request.evidence.map((item) =>
-            buildEvidenceLinkage({
-                url: item.url,
-                mediaType: item.type,
-                uploadedAt: item.uploadedAt,
-            })
-        );
-
         // Return PRD v3.1 format response (extended with audit-grade reason codes + risk signals)
         res.json({
             success: true,
@@ -129,7 +134,7 @@ router.post('/verify', async (req: Request, res: Response) => {
             reason_codes: result.reasonCodes,
             risk_signals_version: 'risk-v1',
             risk_signals: result.riskSignals,
-            evidence_links,
+            evidence_links: evidenceLinks,
             breakdown: {
                 identity_score: result.breakdown.identityScore,
                 integrity_score: result.breakdown.integrityScore,
@@ -194,6 +199,7 @@ router.get('/:id', async (req: Request, res: Response) => {
                 reason_codes: claim.reasonCodes ?? [],
                 risk_signals_version: 'risk-v1',
                 risk_signals: claim.riskSignals ?? [],
+                evidence_links: (claim as any).evidenceLinks ?? [],
                 created_at: claim.createdAt,
                 status: 'processed'
             }

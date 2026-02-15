@@ -542,39 +542,43 @@ export default function InstantVerify() {
                 <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="h-full">
                   <Card className={`h-full border-t-4 shadow-xl overflow-hidden flex flex-col ${toneClasses.border}`}>
                     <div className={`p-6 border-b ${toneClasses.headerBg}`}>
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="flex items-center gap-4">
+                      <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
+                        <div className="flex items-start gap-4">
                           <motion.div
                             initial={{ scale: 0.92, opacity: 0 }}
                             animate={{ scale: 1, opacity: 1 }}
-                            className={`w-14 h-14 rounded-full flex items-center justify-center ${toneClasses.iconWrap}`}
+                            className={`w-14 h-14 rounded-full flex items-center justify-center shadow-sm ${toneClasses.iconWrap}`}
                           >
                             {statusIcon}
                           </motion.div>
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <h2 className={`text-2xl font-bold ${toneClasses.title}`}>{decision.title}</h2>
+
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <h2 className={`text-2xl font-bold tracking-tight ${toneClasses.title}`}>{decision.title}</h2>
                               <Badge className={`${toneClasses.pill} border-0`}>{decision.tier}</Badge>
+                              <span className="text-xs text-muted-foreground font-mono truncate">ID: {verificationResult.verificationId}</span>
                             </div>
-                            <p className="text-sm text-muted-foreground mt-1">{decision.subtitle}</p>
+                            <p className="text-sm text-muted-foreground mt-1 leading-relaxed">{decision.subtitle}</p>
                           </div>
                         </div>
 
-                        <div className="text-right">
-                          <div className="flex items-center justify-end gap-2 flex-wrap">
-                            <Badge variant="outline" className="font-mono">
-                              Confidence: {Math.round(Number(verificationResult.confidence ?? 0))}%
-                            </Badge>
-                            <Badge variant={Number(verificationResult.riskScore ?? 0) >= 50 ? "destructive" : "secondary"}>
-                              Risk: {Number(verificationResult.riskScore ?? 0)}
+                        <div className="w-full md:w-[320px] rounded-xl border bg-background/60 p-4">
+                          <div className="flex items-baseline justify-between">
+                            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Confidence</p>
+                            <p className="text-sm font-semibold">{Math.round(Number(verificationResult.confidence ?? 0))}%</p>
+                          </div>
+                          <Progress value={Math.round(Number(verificationResult.confidence ?? 0))} className="h-2 mt-2" />
+
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            <Badge variant={Number(verificationResult.riskScore ?? 0) >= 50 ? "destructive" : Number(verificationResult.riskScore ?? 0) >= 30 ? "secondary" : "outline"}>
+                              Risk {Number(verificationResult.riskScore ?? 0)}
                             </Badge>
                             {typeof fraudAnalysis?.score === "number" && (
                               <Badge variant={fraudAnalysis.score >= 60 ? "destructive" : fraudAnalysis.score >= 30 ? "secondary" : "outline"}>
-                                Fraud: {Math.round(fraudAnalysis.score)}
+                                Fraud {Math.round(fraudAnalysis.score)}
                               </Badge>
                             )}
                           </div>
-                          <p className="text-xs text-muted-foreground mt-2 font-mono">ID: {verificationResult.verificationId}</p>
                         </div>
                       </div>
 
@@ -607,45 +611,73 @@ export default function InstantVerify() {
 
                     <CardContent className="p-0 flex-1 bg-background overflow-auto">
                       <div className="p-6 space-y-6">
-                        {/* Reason Codes */}
-                        <div className="space-y-2">
-                          <p className="text-xs font-semibold text-muted-foreground uppercase">Reason Codes</p>
+                        {/* Top reasons */}
+                        <div className="space-y-3">
+                          <div className="flex items-center justify-between gap-3">
+                            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Top reasons</p>
+                            {reasonCodes.length > 0 && (
+                              <p className="text-xs text-muted-foreground font-mono">{reasonCodes.length} codes</p>
+                            )}
+                          </div>
+
                           {reasonCodes.length === 0 ? (
                             <div className="text-sm text-muted-foreground border rounded-lg p-3 bg-muted/20">No reason codes returned.</div>
                           ) : (
-                            <Collapsible defaultOpen>
-                              <div className="flex items-center justify-between">
-                                <div className="flex flex-wrap gap-2">
-                                  {reasonCodes.slice(0, 6).map((r, i) => (
-                                    <Badge key={i} variant={r.source === "verifier" ? "secondary" : r.source === "ai" ? "outline" : "secondary"} className="text-xs font-mono">
-                                      {normalizeReasonCode(r.code)}
-                                    </Badge>
-                                  ))}
-                                </div>
-                                {reasonCodes.length > 6 && (
+                            <div className="space-y-3">
+                              <div className="grid gap-2">
+                                {reasonCodes.slice(0, 3).map((r, i) => (
+                                  <div key={i} className="flex items-start justify-between gap-3 rounded-lg border bg-muted/10 p-3">
+                                    <div className="min-w-0">
+                                      <div className="flex flex-wrap items-center gap-2">
+                                        <Badge
+                                          variant={r.source === "ai" ? "outline" : "secondary"}
+                                          className="text-xs font-mono"
+                                        >
+                                          {normalizeReasonCode(r.code)}
+                                        </Badge>
+                                        {("severity" in r && r.severity) ? (
+                                          <span className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                                            {String(r.severity)}
+                                          </span>
+                                        ) : null}
+                                      </div>
+                                      {("message" in r && r.message) ? (
+                                        <p className="text-xs text-muted-foreground mt-1 leading-relaxed">{r.message}</p>
+                                      ) : null}
+                                    </div>
+                                    <span className="text-[11px] text-muted-foreground uppercase tracking-wide">{r.source}</span>
+                                  </div>
+                                ))}
+                              </div>
+
+                              <Collapsible>
+                                <div className="flex items-center justify-between">
+                                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">All codes</p>
                                   <CollapsibleTrigger asChild>
-                                    <Button variant="ghost" size="sm">
-                                      More <ChevronDown className="w-4 h-4 ml-1" />
+                                    <Button variant="ghost" size="sm" className="h-8">
+                                      View <ChevronDown className="w-4 h-4 ml-1" />
                                     </Button>
                                   </CollapsibleTrigger>
-                                )}
-                              </div>
-                              {reasonCodes.length > 6 && (
+                                </div>
                                 <CollapsibleContent className="mt-2">
                                   <div className="flex flex-wrap gap-2">
-                                    {reasonCodes.slice(6).map((r, i) => (
-                                      <Badge key={i} variant={r.source === "verifier" ? "secondary" : r.source === "ai" ? "outline" : "secondary"} className="text-xs font-mono">
+                                    {reasonCodes.map((r, i) => (
+                                      <Badge
+                                        key={i}
+                                        variant={r.source === "ai" ? "outline" : "secondary"}
+                                        className="text-xs font-mono"
+                                      >
                                         {normalizeReasonCode(r.code)}
                                       </Badge>
                                     ))}
                                   </div>
                                 </CollapsibleContent>
-                              )}
-                            </Collapsible>
+                              </Collapsible>
+                            </div>
                           )}
                         </div>
 
-                        {/* What to do next */}
+{/* What to do next */}
                         <div className="space-y-2">
                           <p className="text-xs font-semibold text-muted-foreground uppercase">What to do next</p>
                           <div className="grid gap-3 sm:grid-cols-2">
