@@ -140,7 +140,28 @@ export class BlockchainService {
             };
         }
 
-        if (!this.isConfigured || !this.signer) {
+        if (!this.signer) {
+            return {
+                success: false,
+                hash,
+                error: `Blockchain anchoring is running in deferred mode on ${this.chain}`,
+                code: 'BLOCKCHAIN_DEFERRED_MODE',
+                deferred: true,
+            };
+        }
+
+        // One-shot contract validation for demo/runtime correctness.
+        // init() validation is async; the first write can race it.
+        if (!this.isConfigured) {
+            try {
+                const code = await this.provider.getCode(this.contract.target as string);
+                this.isConfigured = !(code === '0x' || code === '');
+            } catch {
+                this.isConfigured = false;
+            }
+        }
+
+        if (!this.isConfigured) {
             return {
                 success: false,
                 hash,
@@ -186,7 +207,26 @@ export class BlockchainService {
             };
         }
 
-        if (!this.isConfigured || !this.signer) {
+        if (!this.signer) {
+            return {
+                success: false,
+                hash: credentialHash,
+                error: `Blockchain revocation is running in deferred mode on ${this.chain}`,
+                code: 'BLOCKCHAIN_DEFERRED_MODE',
+                deferred: true,
+            };
+        }
+
+        if (!this.isConfigured) {
+            try {
+                const code = await this.provider.getCode(this.contract.target as string);
+                this.isConfigured = !(code === '0x' || code === '');
+            } catch {
+                this.isConfigured = false;
+            }
+        }
+
+        if (!this.isConfigured) {
             return {
                 success: false,
                 hash: credentialHash,
