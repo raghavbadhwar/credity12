@@ -593,16 +593,23 @@ export class VerificationEngine {
         }
 
         if (selectedResult.isValid && selectedResult.exists) {
+            const txHash = typeof proofContainer?.txHash === 'string'
+                ? proofContainer.txHash
+                : (typeof proofContainer?.anchorTxHash === 'string' ? proofContainer.anchorTxHash : undefined);
+            const explorerUrl = txHash ? `https://sepolia.etherscan.io/tx/${txHash}` : undefined;
+
             return {
                 name: 'Blockchain Anchor',
                 status: 'passed',
-                message: `Anchored on Local Polygon: ${selectedResult.anchoredAt}`,
+                message: txHash
+                    ? `Anchored on Sepolia: ${txHash.slice(0, 10)}…`
+                    : 'Anchored on Sepolia',
                 details: {
                     hash: selectedHash,
                     anchored: true,
-                    chain: 'Polygon (Local)',
-                    issuer: selectedResult.issuer,
-                    timestamp: selectedResult.anchoredAt,
+                    chain: 'Ethereum Sepolia',
+                    txHash,
+                    explorerUrl,
                     algorithm,
                     canonicalization: selectedHash === legacyHash ? 'JCS-LIKE-V1' : canonicalization,
                     compatibilityMode: selectedHash === legacyHash ? 'legacy-top-level-hash' : 'strict',
