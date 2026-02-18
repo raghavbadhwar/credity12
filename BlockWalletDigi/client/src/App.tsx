@@ -16,6 +16,7 @@ import CredentialDetail from "@/pages/credential-detail";
 import ConnectionsPage from "@/pages/connections";
 import BusinessDashboard from "@/pages/business-dashboard";
 import IdentityVerification from "@/pages/identity-verification";
+import ReputationContractPreview from "@/pages/reputation-contract-preview";
 
 function Router() {
   return (
@@ -31,6 +32,7 @@ function Router() {
       <Route path="/connections" component={ConnectionsPage} />
       <Route path="/business" component={BusinessDashboard} />
       <Route path="/verify" component={IdentityVerification} />
+      <Route path="/reputation-preview" component={ReputationContractPreview} />
       <Route component={NotFound} />
     </Switch>
   );

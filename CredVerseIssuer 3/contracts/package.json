@@ -4,7 +4,9 @@
   "main": "index.js",
   "scripts": {
     "test": "hardhat test",
+    "test:reputation": "hardhat test test/ReputationVerifier.test.js",
     "compile": "hardhat compile",
+    "deploy:reputation": "hardhat run scripts/deploy-reputation-verifier.js",
     "lint:solidity": "solhint \"contracts/**/*.sol\"",
     "analyze:static": "npm run lint:solidity && npm run compile && npm run test"
   },

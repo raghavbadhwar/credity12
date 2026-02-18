@@ -7,6 +7,7 @@ export default defineConfig({
         exclude: ['tests/e2e/**'],
         globals: true,
         environment: 'node',
+        setupFiles: ['tests/setup-env.ts'],
     },
     resolve: {
         alias: {

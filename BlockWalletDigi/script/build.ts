@@ -5,6 +5,7 @@ import { rm, readFile } from "fs/promises";
 // server deps to bundle to reduce openat(2) syscalls
 // which helps cold start times
 const allowlist = [
+  "@credverse/shared-auth", // bundle shared-auth: file: deps don't resolve on Railway at runtime
   "@google/generative-ai",
   "axios",
   "connect-pg-simple",

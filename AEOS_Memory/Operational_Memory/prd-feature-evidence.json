@@ -1,0 +1,36 @@
+{
+  "generatedAt": "2026-02-17",
+  "method": "evidence-only",
+  "features": {
+    "User Onboarding & Authentication": {
+      "note": "Foundation auth + onboarding flows evidenced via launch checklist and release board artifacts.",
+      "evidence": [
+        "VALIDATION_CHECKLIST_P0_E2E.md",
+        "swarm/reports/credity-s34-master-board.csv"
+      ]
+    },
+    "Identity Verification (Complete Flow)": {
+      "note": "Issue → claim → verify flow documented and tied to release evidence artifacts.",
+      "evidence": [
+        "VALIDATION_CHECKLIST_P0_E2E.md",
+        "swarm/reports/credity-s20-launch-evidence.md"
+      ]
+    },
+    "Reputation Rail (Cross-Platform Trust)": {
+      "note": "Issuer graph integration and route behavior covered by focused tests.",
+      "evidence": [
+        "CredVerseIssuer 3/tests/reputation-graph.test.ts",
+        "CredVerseIssuer 3/tests/reputation-graph-event-mapper.test.ts",
+        "CredVerseIssuer 3/tests/reputation-route-graph.test.ts"
+      ]
+    },
+    "SafeDate Score (Dating Safety Layer)": {
+      "note": "Wallet safe-date summary/preview/reputation paths covered by focused tests.",
+      "evidence": [
+        "BlockWalletDigi/tests/reputation-route-summary.test.ts",
+        "BlockWalletDigi/tests/reputation-preview-fallback.test.ts",
+        "BlockWalletDigi/tests/reputation-rail.test.ts"
+      ]
+    }
+  }
+}

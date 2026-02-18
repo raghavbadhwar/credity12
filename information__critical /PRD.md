@@ -66,6 +66,7 @@ Credity owns the "Enterprise Complete Fraud Prevention" quadrant.
 3. **B2B SaaS Model:** Predictable revenue (competitors rely on tokens or enterprise-only pricing)
 4. **Global from Day 1:** Works with or without government digital ID systems
 5. **Privacy-First:** Zero-knowledge proofs, user control, encrypted storage
+6. **Reputation, Not Just Identity:** Competitors prove you're human. Credity proves you're trustworthy. Cross-platform reputation scoring (WorkScore, SafeDate, TenantScore) creates a network effect moat that identity-only players cannot replicate.
 
 ### 1.4 Strategic Principles
 
@@ -166,26 +167,28 @@ Credity owns the "Enterprise Complete Fraud Prevention" quadrant.
 #### Direct Competitors
 
 **Humanity Protocol**
-- **Focus:** Web3 identity verification via palm scan
-- **Funding:** $50M at $1.1B valuation
-- **Status:** Mainnet launched Aug 2025, 2M verified users
+- **Focus:** Web3 identity verification via palm scan + ZK proofs on Polygon CDK
+- **Funding:** $20M at $1.1B valuation (Pantera Capital, Jump Crypto)
+- **Status:** Mainnet live, 2M verified users, $H token launched (ERC-20, 10B supply)
+- **Key Partnerships:** Mastercard (privacy-preserving KYC), Animoca Brands, OKX Wallet, Polygon Labs
 
 **Strengths:**
-- Massive funding and valuation
-- Strong crypto partnerships (Mastercard, Polygon)
-- 8M signups (though 90% were bots)
-- Token launched ($H)
+- Mastercard partnership gives real-world financial utility
+- "Less invasive" biometric narrative vs Worldcoin (palm > iris)
+- Horizontal SDK play — positioning as developer infrastructure, not consumer app
+- ZK-proofs used as a marketing weapon ("We never see your data")
+- Polygon co-founder (Sandeep Nailwal) is a "Founding Human"
 
 **Weaknesses:**
 - Web3-only focus (ignoring $120B enterprise market)
-- Only verifies identity (no claims/evidence validation)
-- $0 revenue (token-dependent)
-- Token crashed 85% in 48 hours
-- Privacy concerns (biometric data collection)
-- Hardware requirement (Phase 2: palm scanners)
-- 90% of initial signups were bots (founder admitted)
+- Only verifies identity (no claims/evidence/reputation validation)
+- $0 SaaS revenue (entirely token-dependent — crashes with crypto market)
+- Founder admitted ~88% of initial signups were bots
+- $H token dropped 85% in 48 hours post-launch
+- No cross-platform reputation system (proves you're human, not trustworthy)
+- "zkProofer Nodes" are centralized bottleneck disguised as decentralized
 
-**Our Advantage:** We target enterprise (100x bigger market), solve complete problem (identity + claims + evidence), have clear revenue model (SaaS), work on any smartphone.
+**Our Advantage:** We target enterprise (100x bigger market), solve the COMPLETE problem (identity + claims + evidence + reputation), have real SaaS revenue, and prove trustworthiness — not just existence.
 
 **Worldcoin**
 - **Focus:** Iris scanning for Web3 identity
@@ -663,12 +666,14 @@ Authenticates submitted evidence (photos, videos, documents) using deepfake dete
 
 **Functional Requirements:**
 
-**2.1 Liveness Detection**
-- Real-time face detection
-- Challenge-response (smile, turn head)
-- Anti-spoofing (detect masks, photos, screens)
-- 30-second duration
-- Auto-capture when positioned correctly
+**2.1 Bio-Signature Generation**
+- Real-time 3D face mapping with depth analysis
+- Challenge-response (smile, turn head) for anti-spoofing
+- Neural network-powered fraud detection (masks, photos, screens)
+- 30-second duration with haptic feedback and visual mesh overlay
+- Auto-capture with "Signature Generated ✓" confirmation animation
+
+*Design Note: The scanning UI should feel like creating a digital asset, not filling a KYC form. Use particle effects, scanning grid overlays, and a progress ring. (Learned from Humanity Protocol's biometric branding success.)*
 
 **2.2 Document Scanning**
 - Support: Aadhaar, PAN, Passport, Driver's License
@@ -1319,6 +1324,37 @@ Hub: Shared infrastructure (scoring, graph, blockchain)
 2. **Vertical Isolation:** Dating data never leaks to hiring platforms
 3. **Network Effects:** More verticals = more reputation data = better scores
 4. **Operating Leverage:** Add new vertical = 80% margin (minimal dev cost)
+---
+
+### 6.1.1 SDK-First Distribution (Learned from Humanity Protocol)
+
+**Principle:** The SDK is the product. The apps are demos of the SDK.
+
+**`@credverse/trust` SDK (npm package):**
+- Single package for all verticals
+- 3-line integration for any Node.js/React app
+- Returns Trust Score + Recommendation in <2 seconds
+
+**Integration Example:**
+```typescript
+import { CredVerse } from '@credverse/trust';
+
+const cv = new CredVerse({ apiKey: 'cv_live_xxx' });
+
+// One line to verify
+const result = await cv.verify({
+  userId: 'user_123',
+  vertical: 'DATING',         // or 'HIRING', 'RENTAL', etc.
+  requiredScore: 70
+});
+
+// result = { score: 87, recommendation: 'APPROVE', zkProof: '0x...' }
+```
+
+**Why SDK-First Wins:**
+- Humanity Protocol raised $20M selling SDKs. We can do the same with real revenue.
+- Platforms integrate once, locked in forever (switching cost = re-engineering)
+- Every SDK install = a billboard ("Verified by Credity" badge)
 
 ---
 
@@ -1975,6 +2011,13 @@ Margin: 75-95%
 **Competitive Moat:**
 Once 3+ dating apps integrate, verified users won't switch to apps WITHOUT Credity. Network lock-in.
 
+**Anti-Gaming Safeguards (Learned from Humanity Protocol's Bot Crisis):**
+1. **No Token/Cash Incentives for Signups:** Value = utility (3x matches), never money
+2. **Device Fingerprinting:** One verification per physical device
+3. **Phone OTP Required:** Prevents automated mass-registration
+4. **Behavioral Validation:** Require at least 1 platform connection (Uber/LinkedIn) to activate score — bots don't have real Uber accounts
+5. **Graduated Trust:** New users start at Score 50, not 0. Score only improves with real cross-platform data, not referrals
+
 ### 7.2 Sales Strategy
 
 1. **Self-Service PLG (Product-Led Growth)**
@@ -2021,6 +2064,12 @@ Once 3+ dating apps integrate, verified users won't switch to apps WITHOUT Credi
    - Dedicated account manager
    - Custom ML model tuning
    - On-premise deployment option
+
+**Enterprise Governance — "Trust Council" (Differentiator vs Token DAOs):**
+- Top enterprise customers (5-10 seats) get voting rights on scoring algorithm changes
+- Quarterly "Trust Council" meetings to review scoring fairness
+- Transparency reports published to all Council members
+- *Why:* Humanity Protocol uses a token DAO for governance. Enterprise CXOs don't trust crypto voting. A "Trust Council" builds institutional loyalty and lock-in.
 
 **B. Dating & Social Platforms (New - Year 1+)** 🆕
 
@@ -2159,6 +2208,15 @@ Once 3+ dating apps integrate, verified users won't switch to apps WITHOUT Credi
 ---
 
 ## 11. LAUNCH PLAN
+
+**Phase 0: Pre-Launch — "Claim Your Reputation" Campaign (Month -2 to 0)**
+- Landing page: "Reserve your @username on the Reputation Rail"
+- Allow users to link Uber/LinkedIn/Swiggy to generate a "Preview Score"
+- Leaderboard: "Top 100 most trusted users get Early Adopter badge"
+- Target: 10,000 pre-registrations before Alpha launch
+- Anti-bot: Device fingerprinting + phone OTP required (no token incentives)
+- Focus: Build a waitlist AND validate platform connection APIs simultaneously
+- *Lesson from Humanity Protocol: They got 50K pre-launch signups. But 88% were bots because they used token incentives. We use UTILITY incentives instead (your score improves with more connections → better matches/jobs).*
 
 **Phase 1: Alpha (Months 1-3)**
 - Build MVP (Identity + Document Scan)

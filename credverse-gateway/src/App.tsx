@@ -161,8 +161,17 @@ type ProgressItem = {
 
 type ProgressSnapshot = {
   generatedAt: string;
+  source?: {
+    prdFeatureTrackerJson?: string | null;
+    prdFeatureTrackerCsv?: string | null;
+  };
   summary: {
     completionPct: number;
+    prdCompletionPct?: number | null;
+    prdRequirementsCompletionPct?: number | null;
+    prdRequirementsTotal?: number | null;
+    prdEvidenceMappedFeatures?: number | null;
+    prdFeaturesTotal?: number | null;
     totals: {
       byLane: Record<string, number>;
       byPriority: Record<string, number>;
@@ -253,6 +262,16 @@ function OpsDashboard() {
             <a className="ops-link" href={hashLink('')}>
               Back to Site
             </a>
+            {data?.source?.prdFeatureTrackerCsv ? (
+              <a className="ops-link" href="/progress/prd-feature-tracker.csv" target="_blank" rel="noreferrer">
+                PRD Tracker CSV <ExternalLink size={16} />
+              </a>
+            ) : null}
+            {data?.source?.prdFeatureTrackerJson ? (
+              <a className="ops-link" href="/progress/prd-feature-tracker.json" target="_blank" rel="noreferrer">
+                PRD Tracker JSON <ExternalLink size={16} />
+              </a>
+            ) : null}
           </div>
         </div>
         <div className="ops-kpis">
@@ -263,6 +282,13 @@ function OpsDashboard() {
             data && data.summary.prdRequirementsTotal != null
               ? `Req-level: ${data.summary.prdRequirementsCompletionPct ?? 0}% of ${data.summary.prdRequirementsTotal}`
               : 'Evidence-only feature rubric',
+          )}
+          {kpi(
+            'Feature evidence mapped',
+            data && data.summary.prdFeaturesTotal != null && data.summary.prdEvidenceMappedFeatures != null
+              ? `${data.summary.prdEvidenceMappedFeatures}/${data.summary.prdFeaturesTotal}`
+              : '—',
+            'CSV + JSON tracker artifacts',
           )}
           {kpi('P0 count', data ? String(data.summary.totals.byPriority['P0'] || 0) : '—', 'Critical execution pressure')}
           {kpi('Blocked', data ? String(data.summary.totals.byStatus['Blocked'] || 0) : '—', 'Explicit external dependencies')}
@@ -340,8 +366,6 @@ function App() {
   const hash = typeof window !== 'undefined' ? window.location.hash : '';
   // Support hash-based routing for static hosts like GitHub Pages.
   const opsRoute = hash.startsWith('#/ops') || path.endsWith('/ops') || path.startsWith('/ops');
-  if (opsRoute) return <OpsDashboard />;
-
   const [form, setForm] = useState({ name: '', email: '', org: '', message: '' });
 
   const mailHref = useMemo(() => {
@@ -351,6 +375,8 @@ function App() {
     );
     return `mailto:${DEMO_EMAIL}?subject=${subject}&body=${body}`;
   }, [form]);
+
+  if (opsRoute) return <OpsDashboard />;
 
   const onSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();

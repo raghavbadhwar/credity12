@@ -1,0 +1,15 @@
+featureId,featureNumber,feature,status,evidenceCount,evidencePaths,evidenceNote
+F01,1,User Onboarding & Authentication,PARTIAL,2,VALIDATION_CHECKLIST_P0_E2E.md | swarm/reports/credity-s34-master-board.csv,Foundation auth + onboarding flows evidenced via launch checklist and release board artifacts.
+F02,2,Identity Verification (Complete Flow),PARTIAL,2,VALIDATION_CHECKLIST_P0_E2E.md | swarm/reports/credity-s20-launch-evidence.md,Issue → claim → verify flow documented and tied to release evidence artifacts.
+F03,5,Reputation Rail (Cross-Platform Trust) 🆕,PARTIAL,3,CredVerseIssuer 3/tests/reputation-graph.test.ts | CredVerseIssuer 3/tests/reputation-graph-event-mapper.test.ts | CredVerseIssuer 3/tests/reputation-route-graph.test.ts,Issuer graph integration and route behavior covered by focused tests.
+F04,6,SafeDate Score (Dating Safety Layer),PARTIAL,3,BlockWalletDigi/tests/reputation-route-summary.test.ts | BlockWalletDigi/tests/reputation-preview-fallback.test.ts | BlockWalletDigi/tests/reputation-rail.test.ts,Wallet safe-date summary/preview/reputation paths covered by focused tests.
+F05,7,Gig Economy Onboarding Acceleration,NOT_STARTED,0,,
+F06,8,WorkScore (Comprehensive Employment Verification),NOT_STARTED,0,,
+F07,9,TenantScore (Rental Housing Verification),NOT_STARTED,0,,
+F08,10,HealthScore (Healthcare/Telemedicine Trust),NOT_STARTED,0,,
+F09,11,TutorScore (Education Marketplace Verification),NOT_STARTED,0,,
+F10,12,HomeWorkerScore (Domestic Services Verification),NOT_STARTED,0,,
+F11,13,TrustScore for Lending (Alternative Credit),NOT_STARTED,0,,
+F12,3,Trust Score Calculation,NOT_STARTED,0,,
+F13,4,Credential Management,NOT_STARTED,0,,
+F14,5,Platform Connections,NOT_STARTED,0,,

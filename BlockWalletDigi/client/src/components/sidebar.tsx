@@ -11,7 +11,8 @@ import {
   Sun,
   Link2,
   BarChart3,
-  ScanFace
+  ScanFace,
+  BadgeCheck
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -26,6 +27,7 @@ export function Sidebar() {
     { href: "/receive", icon: Inbox, label: "Receive" },
     { href: "/id", icon: CreditCard, label: "Digital ID" },
     { href: "/verify", icon: ScanFace, label: "Identity Verification" },
+    { href: "/reputation-preview", icon: BadgeCheck, label: "Reputation Preview" },
     { href: "/profile", icon: User, label: "Career Profile" },
     { href: "/connections", icon: Link2, label: "Connections" },
     { href: "/connect", icon: Shield, label: "Connect Services" },

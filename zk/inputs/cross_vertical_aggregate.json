@@ -1,0 +1,9 @@
+{
+  "minVerticals": "3",
+  "minScorePerVertical": "60",
+  "minAverageScore": "75",
+  "commitment": "9542400305",
+  "scores": ["80", "78", "85", "62", "55"],
+  "selectors": ["1", "1", "1", "1", "0"],
+  "salt": "9542"
+}

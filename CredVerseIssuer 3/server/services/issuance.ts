@@ -5,6 +5,8 @@ import { signVcJwt } from "./vc-signer";
 import { randomUUID } from "crypto";
 import { signWebhook } from "@credverse/shared-auth";
 import { registerCredentialStatus } from "./status-list-service";
+import { buildIssuanceEvidenceMetadata } from "./issuance-metadata";
+import { mapIssuerTrustStatusToDecision, WORKSCORE_TRUST_REASON_CODES } from "../domain/workscore-trust";
 
 export class RevocationError extends Error {
     constructor(
@@ -40,12 +42,17 @@ export class IssuanceService {
         // Construct VC Payload following W3C VC Data Model
         const subjectDid = recipient.did || recipient.studentId;
         const issuerDid = issuer.did || `did:web:${issuer.domain}`;
+        const issuanceMetadata = buildIssuanceEvidenceMetadata({
+            issuerDid,
+            credentialType: template.name,
+            additionalCredentialTypes: ['VerifiableCredential'],
+        });
         const vcPayload = {
             sub: subjectDid,
             iss: issuerDid,
-            iat: Math.floor(Date.now() / 1000),
-            nbf: Math.floor(Date.now() / 1000),
-            exp: Math.floor(Date.now() / 1000) + (365 * 24 * 60 * 60), // 1 year
+            iat: issuanceMetadata.issuedAtUnix,
+            nbf: issuanceMetadata.issuedAtUnix,
+            exp: issuanceMetadata.issuedAtUnix + (365 * 24 * 60 * 60), // 1 year
             vc: {
                 "@context": [
                     "https://www.w3.org/2018/credentials/v1",
@@ -56,7 +63,7 @@ export class IssuanceService {
                     id: issuerDid,
                     name: issuer.name,
                 },
-                issuanceDate: new Date().toISOString(),
+                issuanceDate: issuanceMetadata.issuedAt,
                 credentialSubject: {
                     id: subjectDid,
                     ...credentialData,
@@ -169,16 +176,31 @@ export class IssuanceService {
 
         // Attach non-sensitive audit metadata for downstream verifiers/recruiters.
         // NOTE: This is additive and does not change the VC signature surface (stored vcJwt stays authoritative).
+        const issuerTrustStatus = (issuer as any).trustStatus ?? 'unknown';
+        const trustDecision = mapIssuerTrustStatusToDecision(issuerTrustStatus);
+        const trustReasonCodes = trustDecision === 'trusted'
+            ? [WORKSCORE_TRUST_REASON_CODES.VERIFIED_DID_CONTROL]
+            : trustDecision === 'revoked'
+                ? [WORKSCORE_TRUST_REASON_CODES.SANCTIONED_OR_BLOCKLISTED]
+                : [WORKSCORE_TRUST_REASON_CODES.MANUAL_REVIEW_REQUIRED];
+
         (credential as any).audit = {
             issuance: {
                 mode: 'legacy',
-                issuedAt: vcPayload.vc.issuanceDate,
-                issuerDid,
+                issuedAt: issuanceMetadata.issuedAt,
+                issuedAtUnix: issuanceMetadata.issuedAtUnix,
+                issuerDid: issuanceMetadata.issuerDid,
                 subjectDid,
+                credentialType: issuanceMetadata.credentialType,
+                credentialTypeNormalized: issuanceMetadata.credentialTypeNormalized,
+                credentialTypes: issuanceMetadata.credentialTypes,
+                credentialTypesNormalized: issuanceMetadata.credentialTypesNormalized,
                 template: { id: templateId, name: template.name, version: template.version },
             },
             trust: {
-                issuerTrustStatus: (issuer as any).trustStatus ?? 'unknown',
+                issuerTrustStatus,
+                decision: trustDecision,
+                reasonCodes: trustReasonCodes,
             },
         };
 

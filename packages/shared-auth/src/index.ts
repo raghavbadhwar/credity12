@@ -89,6 +89,47 @@ export type {
     RevocationWitnessContract,
 } from './contracts';
 
+// Reputation contracts (WorkScore/SafeDate)
+export {
+    REASON_CODE_VALUES,
+    toSafeDateBadgeLevel,
+} from './reputation-contracts';
+export type {
+    KnownReasonCode,
+    ReasonCode,
+    VerificationDecision,
+    WorkScoreBreakdown,
+    VerificationEvidence,
+    CandidateVerificationSummary,
+    SafeDateBadge,
+} from './reputation-contracts';
+
+// Recruiter evaluation contracts (WorkScore/SafeDate)
+export {
+    WORKSCORE_WEIGHTS,
+    WORKSCORE_REASON_CODES,
+    SAFEDATE_WEIGHTS,
+    SAFEDATE_REASON_CODES,
+} from './recruiter-evaluation-contracts';
+export type {
+    WorkScoreComponent,
+    WorkScoreReasonCode,
+    WorkScoreDecision,
+    WorkScoreInput,
+    WorkScoreBreakdownMap,
+    WorkScoreEvidence,
+    WorkScoreEvaluationRequestContract,
+    WorkScoreEvaluationContract,
+    SafeDateFactor,
+    SafeDateReasonCode,
+    SafeDateDecision,
+    SafeDateInput,
+    SafeDateBreakdownMap,
+    SafeDateEvidence,
+    SafeDateEvaluationRequestContract,
+    SafeDateEvaluationContract,
+} from './recruiter-evaluation-contracts';
+
 // Blockchain network/runtime helpers
 export type {
     SupportedChainNetwork,

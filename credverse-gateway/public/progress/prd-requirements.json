@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-02-15T14:24:48.115Z",
+  "generatedAt": "2026-02-17T12:34:11.994Z",
   "method": "requirement-level (heuristic extraction from PRD Feature Requirements)",
   "totalRequirements": 189,
   "achievedScore": 0,
@@ -62,31 +62,31 @@
     {
       "id": "F2-001",
       "feature": "Identity Verification (Complete Flow)",
-      "requirement": "Real-time face detection",
+      "requirement": "Real-time 3D face mapping with depth analysis",
       "status": "NOT_STARTED"
     },
     {
       "id": "F2-002",
       "feature": "Identity Verification (Complete Flow)",
-      "requirement": "Challenge-response (smile, turn head)",
+      "requirement": "Challenge-response (smile, turn head) for anti-spoofing",
       "status": "NOT_STARTED"
     },
     {
       "id": "F2-003",
       "feature": "Identity Verification (Complete Flow)",
-      "requirement": "Anti-spoofing (detect masks, photos, screens)",
+      "requirement": "Neural network-powered fraud detection (masks, photos, screens)",
       "status": "NOT_STARTED"
     },
     {
       "id": "F2-004",
       "feature": "Identity Verification (Complete Flow)",
-      "requirement": "30-second duration",
+      "requirement": "30-second duration with haptic feedback and visual mesh overlay",
       "status": "NOT_STARTED"
     },
     {
       "id": "F2-005",
       "feature": "Identity Verification (Complete Flow)",
-      "requirement": "Auto-capture when positioned correctly",
+      "requirement": "Auto-capture with \"Signature Generated ✓\" confirmation animation",
       "status": "NOT_STARTED"
     },
     {

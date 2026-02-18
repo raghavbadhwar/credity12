@@ -19,6 +19,8 @@ type VerifyInput = ProofVerificationRequestContract & {
   hash_algorithm?: 'sha256' | 'keccak256';
 };
 
+const SUPPORTED_ZK_CIRCUITS = new Set(['score_threshold', 'age_verification', 'cross_vertical_aggregate']);
+
 function makeResult(valid: boolean, reasonCodes: string[], extractedClaims?: Record<string, unknown>): ProofVerificationResultContract {
   return {
     id: `proof_verify_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`,
@@ -122,6 +124,17 @@ export async function verifyProofContract(input: VerifyInput): Promise<ProofVeri
       if (subjectDid !== input.expected_subject_did) {
         valid = false;
         reasonCodes.push('SUBJECT_DID_MISMATCH');
+      }
+    }
+  }
+
+  if (typeof input.proof === 'object') {
+    const zkHook = (input.proof as Record<string, unknown>).zk_hook;
+    if (zkHook && typeof zkHook === 'object') {
+      const circuit = (zkHook as Record<string, unknown>).circuit;
+      if (typeof circuit !== 'string' || !SUPPORTED_ZK_CIRCUITS.has(circuit)) {
+        valid = false;
+        reasonCodes.push('ZK_CIRCUIT_UNSUPPORTED');
       }
     }
   }

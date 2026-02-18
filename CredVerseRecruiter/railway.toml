@@ -1,6 +1,6 @@
 [build]
 builder = "nixpacks"
-buildCommand = "cd ../packages/shared-auth && npm install && npm run build && cd ../../CredVerseRecruiter && npm install --legacy-peer-deps && npm run build"
+buildCommand = "npm install --legacy-peer-deps && npm run build"
 
 [deploy]
 startCommand = "npm run start"

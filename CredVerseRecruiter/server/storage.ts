@@ -18,6 +18,22 @@ export interface VerificationRecord {
   verifiedBy: string;
 }
 
+export interface WorkScoreEvaluationSnapshot {
+  id: string;
+  candidate_hash?: string;
+  context_hash?: string;
+  score: number;
+  breakdown: Record<string, number>;
+  decision: string;
+  reason_codes: string[];
+  evidence: {
+    summary: string;
+    anchors_checked: string[];
+    docs_checked: string[];
+  };
+  timestamp: Date;
+}
+
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
@@ -27,11 +43,17 @@ export interface IStorage {
   addVerification(record: VerificationRecord): Promise<void>;
   getVerifications(filters?: { status?: string; startDate?: Date; endDate?: Date }): Promise<VerificationRecord[]>;
   getVerification(id: string): Promise<VerificationRecord | undefined>;
+
+  // WorkScore evaluation snapshots
+  addWorkScoreEvaluation(snapshot: WorkScoreEvaluationSnapshot): Promise<void>;
+  getWorkScoreEvaluation(id: string): Promise<WorkScoreEvaluationSnapshot | undefined>;
+  getWorkScoreEvaluations(limit?: number): Promise<WorkScoreEvaluationSnapshot[]>;
 }
 
 interface RecruiterStorageState {
   users: Array<[string, User]>;
   verifications: VerificationRecord[];
+  workScoreEvaluations: WorkScoreEvaluationSnapshot[];
 }
 
 function parseDate(value: unknown): Date {
@@ -46,10 +68,12 @@ function parseDate(value: unknown): Date {
 export class MemStorage implements IStorage {
   private users: Map<string, User>;
   private verifications: VerificationRecord[];
+  private workScoreEvaluations: WorkScoreEvaluationSnapshot[];
 
   constructor() {
     this.users = new Map();
     this.verifications = [];
+    this.workScoreEvaluations = [];
   }
 
   async getUser(id: string): Promise<User | undefined> {
@@ -96,10 +120,27 @@ export class MemStorage implements IStorage {
     return this.verifications.find(r => r.id === id);
   }
 
+  async addWorkScoreEvaluation(snapshot: WorkScoreEvaluationSnapshot): Promise<void> {
+    this.workScoreEvaluations.unshift(snapshot);
+    if (this.workScoreEvaluations.length > 5000) {
+      this.workScoreEvaluations.pop();
+    }
+  }
+
+  async getWorkScoreEvaluation(id: string): Promise<WorkScoreEvaluationSnapshot | undefined> {
+    return this.workScoreEvaluations.find((row) => row.id === id);
+  }
+
+  async getWorkScoreEvaluations(limit = 50): Promise<WorkScoreEvaluationSnapshot[]> {
+    const normalizedLimit = Number.isFinite(limit) ? Math.max(1, Math.floor(limit)) : 50;
+    return this.workScoreEvaluations.slice(0, Math.min(normalizedLimit, 200));
+  }
+
   exportState(): RecruiterStorageState {
     return {
       users: Array.from(this.users.entries()),
       verifications: [...this.verifications],
+      workScoreEvaluations: [...this.workScoreEvaluations],
     };
   }
 
@@ -109,6 +150,10 @@ export class MemStorage implements IStorage {
       createdAt: parseDate((value as any).createdAt),
     }]));
     this.verifications = (state.verifications || []).map((row) => ({
+      ...row,
+      timestamp: parseDate((row as any).timestamp),
+    }));
+    this.workScoreEvaluations = (state.workScoreEvaluations || []).map((row) => ({
       ...row,
       timestamp: parseDate((row as any).timestamp),
     }));

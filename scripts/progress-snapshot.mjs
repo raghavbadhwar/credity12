@@ -103,18 +103,30 @@ try {
   prdReq = null;
 }
 
+let prdTracker = null;
+try {
+  const prdTrackerPath = path.join(ROOT, 'credverse-gateway', 'public', 'progress', 'prd-feature-tracker.json');
+  if (fs.existsSync(prdTrackerPath)) prdTracker = JSON.parse(fs.readFileSync(prdTrackerPath, 'utf8'));
+} catch {
+  prdTracker = null;
+}
+
 const snapshot = {
     generatedAt: new Date().toISOString(),
     source: {
       boardCsv: 'swarm/reports/credity-s34-master-board.csv',
       prdJson: prd ? 'credverse-gateway/public/progress/prd.json' : null,
       prdRequirementsJson: prdReq ? 'credverse-gateway/public/progress/prd-requirements.json' : null,
+      prdFeatureTrackerJson: prdTracker ? 'credverse-gateway/public/progress/prd-feature-tracker.json' : null,
+      prdFeatureTrackerCsv: prdTracker ? 'credverse-gateway/public/progress/prd-feature-tracker.csv' : null,
     },
     summary: {
       ...summary,
       prdCompletionPct: prd?.prdCompletionPct ?? null,
       prdRequirementsCompletionPct: prdReq?.prdRequirementsCompletionPct ?? null,
       prdRequirementsTotal: prdReq?.totalRequirements ?? null,
+      prdEvidenceMappedFeatures: prdTracker?.mappedEvidenceFeatures ?? null,
+      prdFeaturesTotal: prdTracker?.totalFeatures ?? null,
     },
     items: rows.map((r) => ({
       id: r.ID,

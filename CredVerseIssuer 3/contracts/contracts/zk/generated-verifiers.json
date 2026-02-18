@@ -1,0 +1,8 @@
+{
+  "updatedAt": "2026-02-18T04:42:58.331Z",
+  "verifiers": {
+    "score_threshold": "CredVerseIssuer 3/contracts/contracts/zk/GeneratedGroth16Verifier_score_threshold.sol",
+    "age_verification": "CredVerseIssuer 3/contracts/contracts/zk/GeneratedGroth16Verifier_age_verification.sol",
+    "cross_vertical_aggregate": "CredVerseIssuer 3/contracts/contracts/zk/GeneratedGroth16Verifier_cross_vertical_aggregate.sol"
+  }
+}

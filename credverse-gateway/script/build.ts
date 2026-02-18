@@ -5,6 +5,7 @@ import path from "path";
 
 // Server dependencies to bundle for faster cold starts
 const allowlist = [
+    "@credverse/shared-auth", // bundle shared-auth: file: deps don't resolve on Railway at runtime
     "cors",
     "cookie-parser",
     "dotenv",

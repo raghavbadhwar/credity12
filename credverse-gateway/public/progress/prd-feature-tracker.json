@@ -1,0 +1,133 @@
+{
+  "generatedAt": "2026-02-17T12:35:38.153Z",
+  "totalFeatures": 14,
+  "mappedEvidenceFeatures": 4,
+  "items": [
+    {
+      "featureId": "F01",
+      "featureNumber": 1,
+      "feature": "User Onboarding & Authentication",
+      "status": "PARTIAL",
+      "evidence": [
+        "VALIDATION_CHECKLIST_P0_E2E.md",
+        "swarm/reports/credity-s34-master-board.csv"
+      ],
+      "evidenceNote": "Foundation auth + onboarding flows evidenced via launch checklist and release board artifacts."
+    },
+    {
+      "featureId": "F02",
+      "featureNumber": 2,
+      "feature": "Identity Verification (Complete Flow)",
+      "status": "PARTIAL",
+      "evidence": [
+        "VALIDATION_CHECKLIST_P0_E2E.md",
+        "swarm/reports/credity-s20-launch-evidence.md"
+      ],
+      "evidenceNote": "Issue → claim → verify flow documented and tied to release evidence artifacts."
+    },
+    {
+      "featureId": "F03",
+      "featureNumber": 5,
+      "feature": "Reputation Rail (Cross-Platform Trust) 🆕",
+      "status": "PARTIAL",
+      "evidence": [
+        "CredVerseIssuer 3/tests/reputation-graph.test.ts",
+        "CredVerseIssuer 3/tests/reputation-graph-event-mapper.test.ts",
+        "CredVerseIssuer 3/tests/reputation-route-graph.test.ts"
+      ],
+      "evidenceNote": "Issuer graph integration and route behavior covered by focused tests."
+    },
+    {
+      "featureId": "F04",
+      "featureNumber": 6,
+      "feature": "SafeDate Score (Dating Safety Layer)",
+      "status": "PARTIAL",
+      "evidence": [
+        "BlockWalletDigi/tests/reputation-route-summary.test.ts",
+        "BlockWalletDigi/tests/reputation-preview-fallback.test.ts",
+        "BlockWalletDigi/tests/reputation-rail.test.ts"
+      ],
+      "evidenceNote": "Wallet safe-date summary/preview/reputation paths covered by focused tests."
+    },
+    {
+      "featureId": "F05",
+      "featureNumber": 7,
+      "feature": "Gig Economy Onboarding Acceleration",
+      "status": "NOT_STARTED",
+      "evidence": [],
+      "evidenceNote": ""
+    },
+    {
+      "featureId": "F06",
+      "featureNumber": 8,
+      "feature": "WorkScore (Comprehensive Employment Verification)",
+      "status": "NOT_STARTED",
+      "evidence": [],
+      "evidenceNote": ""
+    },
+    {
+      "featureId": "F07",
+      "featureNumber": 9,
+      "feature": "TenantScore (Rental Housing Verification)",
+      "status": "NOT_STARTED",
+      "evidence": [],
+      "evidenceNote": ""
+    },
+    {
+      "featureId": "F08",
+      "featureNumber": 10,
+      "feature": "HealthScore (Healthcare/Telemedicine Trust)",
+      "status": "NOT_STARTED",
+      "evidence": [],
+      "evidenceNote": ""
+    },
+    {
+      "featureId": "F09",
+      "featureNumber": 11,
+      "feature": "TutorScore (Education Marketplace Verification)",
+      "status": "NOT_STARTED",
+      "evidence": [],
+      "evidenceNote": ""
+    },
+    {
+      "featureId": "F10",
+      "featureNumber": 12,
+      "feature": "HomeWorkerScore (Domestic Services Verification)",
+      "status": "NOT_STARTED",
+      "evidence": [],
+      "evidenceNote": ""
+    },
+    {
+      "featureId": "F11",
+      "featureNumber": 13,
+      "feature": "TrustScore for Lending (Alternative Credit)",
+      "status": "NOT_STARTED",
+      "evidence": [],
+      "evidenceNote": ""
+    },
+    {
+      "featureId": "F12",
+      "featureNumber": 3,
+      "feature": "Trust Score Calculation",
+      "status": "NOT_STARTED",
+      "evidence": [],
+      "evidenceNote": ""
+    },
+    {
+      "featureId": "F13",
+      "featureNumber": 4,
+      "feature": "Credential Management",
+      "status": "NOT_STARTED",
+      "evidence": [],
+      "evidenceNote": ""
+    },
+    {
+      "featureId": "F14",
+      "featureNumber": 5,
+      "feature": "Platform Connections",
+      "status": "NOT_STARTED",
+      "evidence": [],
+      "evidenceNote": ""
+    }
+  ]
+}

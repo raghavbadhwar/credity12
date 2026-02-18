@@ -12,8 +12,33 @@ import {
   reputationCategoryEnum,
   reputationVerticalEnum,
 } from "@shared/schema";
+import type { SafeDateScoreContract } from "@credverse/shared-auth";
+import { createReputationGraphService } from "../services/reputation-graph";
+import { mapReputationEventToGraphEdge } from "../services/reputation-graph-event-mapper";
 
 const router = Router();
+const reputationGraphService = createReputationGraphService();
+
+async function writeReputationGraphEdgeSafe(
+  graphEdge: Parameters<typeof reputationGraphService.writeEdge>[0],
+): Promise<{ accepted: boolean; reason?: string }> {
+  try {
+    return await reputationGraphService.writeEdge(graphEdge);
+  } catch {
+    return { accepted: false, reason: "reputation_graph_write_failed" };
+  }
+}
+
+async function getReputationGraphSnapshotSafe(
+  query: Parameters<typeof reputationGraphService.getSnapshot>[0],
+): Promise<{ snapshot: Awaited<ReturnType<typeof reputationGraphService.getSnapshot>>; reason?: string }> {
+  try {
+    const snapshot = await reputationGraphService.getSnapshot(query);
+    return { snapshot };
+  } catch {
+    return { snapshot: null, reason: "reputation_graph_snapshot_failed" };
+  }
+}
 
 type ReputationCategory = (typeof reputationCategoryEnum.enumValues)[number];
 type ReputationVertical = (typeof reputationVerticalEnum.enumValues)[number];
@@ -41,14 +66,7 @@ const SOCIAL_VALIDATION_SIGNALS = new Set<string>([
   "verified_reference",
 ]);
 
-type SafeDateBreakdown = {
-  identity_verified_points: number;
-  liveness_points: number;
-  background_clean_points: number;
-  cross_platform_reputation_points: number;
-  social_validation_points: number;
-  harassment_free_points: number;
-};
+type SafeDateBreakdown = SafeDateScoreContract["breakdown"];
 
 function normalizeSubjectDid(payload: any): string | null {
   return (
@@ -150,7 +168,7 @@ function calculateSafeDateScore(
   userId: number,
   reputationScore: number,
   events: Array<{ signalType: string; score: number; category: string }>,
-) {
+): SafeDateScoreContract {
   const identityVerified = events.some((event) => {
     if (event.category !== "identity") return false;
     const signal = event.signalType.toLowerCase();
@@ -270,7 +288,11 @@ router.post("/reputation/events", apiKeyOrAuthMiddleware, async (req, res) => {
     .limit(1);
 
   if (existing[0]) {
-    return res.status(200).json({ success: true, event: existing[0] });
+    return res.status(200).json({
+      success: true,
+      event: existing[0],
+      graph: { accepted: false, reason: "duplicate_event_skipped" },
+    });
   }
 
   const occurredAt = req.body.occurred_at ? new Date(req.body.occurred_at) : new Date();
@@ -288,7 +310,19 @@ router.post("/reputation/events", apiKeyOrAuthMiddleware, async (req, res) => {
     })
     .returning();
 
-  return res.status(201).json({ success: true, event: inserted });
+  const graphEdge = mapReputationEventToGraphEdge({
+    eventId,
+    subjectDid,
+    platformId,
+    category,
+    signalType,
+    score,
+    occurredAt: toIsoString(occurredAt),
+  });
+
+  const graph = await writeReputationGraphEdgeSafe(graphEdge);
+
+  return res.status(201).json({ success: true, event: inserted, graph });
 });
 
 router.get("/reputation/events", apiKeyOrAuthMiddleware, async (req, res) => {
@@ -417,6 +451,19 @@ router.get("/reputation/score", apiKeyOrAuthMiddleware, async (req, res) => {
       vertical,
     },
   });
+});
+
+router.get("/reputation/graph/snapshot", apiKeyOrAuthMiddleware, async (req, res) => {
+  const query = req.query as Record<string, unknown>;
+  const subjectDid = getSubjectDidFromQuery(query);
+  if (!subjectDid) {
+    return res.status(400).json({ error: "Missing subjectDid/userId query parameter" });
+  }
+
+  const asOf = getStringFromQuery(query.asOf) || undefined;
+  const graph = await getReputationGraphSnapshotSafe({ subjectDid, asOf });
+
+  return res.status(200).json({ success: true, snapshot: graph.snapshot, graph: graph.reason ? { accepted: false, reason: graph.reason } : undefined });
 });
 
 router.get("/reputation/safedate", apiKeyOrAuthMiddleware, async (req, res) => {

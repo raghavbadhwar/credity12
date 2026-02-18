@@ -124,7 +124,7 @@ export interface PlatformAuthorityContract {
     created_at: string;
 }
 
-export type ProofFormatContract = 'sd-jwt-vc' | 'jwt_vp' | 'ldp_vp' | 'merkle-membership';
+export type ProofFormatContract = 'sd-jwt-vc' | 'jwt_vp' | 'ldp_vp' | 'ldp_vc' | 'merkle-membership';
 export type ProofPurposeContract = 'authentication' | 'assertionMethod';
 
 export interface ProofGenerationRequestContract {

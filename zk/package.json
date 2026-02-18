@@ -1,0 +1,22 @@
+{
+  "name": "@credity/zk",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build:circuit:score": "mkdir -p artifacts/score_threshold && circom2 circuits/score_threshold.circom --r1cs --wasm --sym -o artifacts/score_threshold",
+    "build:circuit:age": "mkdir -p artifacts/age_verification && circom2 circuits/age_verification.circom --r1cs --wasm --sym -o artifacts/age_verification",
+    "build:circuit:aggregate": "mkdir -p artifacts/cross_vertical_aggregate && circom2 circuits/cross_vertical_aggregate.circom --r1cs --wasm --sym -o artifacts/cross_vertical_aggregate",
+    "build:circuits": "npm run build:circuit:score && npm run build:circuit:age && npm run build:circuit:aggregate",
+    "setup:groth16": "node scripts/setup-groth16.mjs",
+    "artifacts:validate": "node scripts/validate-artifacts.mjs",
+    "prove": "node scripts/generate-zk-proof.mjs",
+    "verify": "node scripts/verify-zk-proof.mjs",
+    "export:verifier": "node scripts/export-solidity-verifier.mjs",
+    "export:verifier:all": "node scripts/export-solidity-verifier.mjs score_threshold && node scripts/export-solidity-verifier.mjs age_verification && node scripts/export-solidity-verifier.mjs cross_vertical_aggregate",
+    "test": "node --test tests/*.test.mjs"
+  },
+  "devDependencies": {
+    "circom2": "^0.2.22",
+    "snarkjs": "^0.7.5"
+  }
+}

@@ -9,8 +9,11 @@ import {
     listReputationEvents,
     ReputationCategory,
     ReputationEventInput,
+    ReputationEventRecord,
     upsertReputationEvent,
 } from '../services/reputation-rail-service';
+import { CredVerse, type CandidateVerificationSummary, type VerificationEvidence, type ReputationScoreContract, type SafeDateScoreContract } from '@credverse/trust';
+import { type ReasonCode } from '@credverse/shared-auth'; // ReasonCode not yet exported by trust-sdk
 
 const router = Router();
 
@@ -42,7 +45,101 @@ function getAllowedPlatforms(): Set<string> {
     );
 }
 
-async function buildSafeDateSnapshot(userId: number) {
+function normalizeReasonCode(code: string): ReasonCode {
+    return code.trim().toUpperCase().replace(/[^A-Z0-9]+/g, '_') as ReasonCode;
+}
+
+function isTrustSdkEnabled(): boolean {
+    return String(process.env.REPUTATION_TRUST_SDK_ENABLED || '').toLowerCase() === 'true';
+}
+
+function createTrustSdkClient(): CredVerse | null {
+    const baseUrl = process.env.TRUST_SDK_BASE_URL;
+    if (!isTrustSdkEnabled() || !baseUrl) return null;
+
+    const timeoutMs = Number(process.env.TRUST_SDK_TIMEOUT_MS || 10_000);
+    return new CredVerse({
+        baseUrl,
+        apiKey: process.env.TRUST_SDK_API_KEY,
+        timeoutMs: Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : 10_000,
+    });
+}
+
+function normalizeBreakdownWeight(weight: number): number {
+    return weight > 1 ? weight / 100 : weight;
+}
+
+function mapVerificationDecision(score: number, safeDateScore: number, reasonCodes: string[]): CandidateVerificationSummary['decision'] {
+    const normalized = reasonCodes.map(normalizeReasonCode);
+    if (normalized.includes('HARASSMENT_REPORTS_PRESENT') || normalized.includes('BACKGROUND_FLAGS_PRESENT')) {
+        return 'investigate';
+    }
+    if (score >= 800 && safeDateScore >= 70) return 'approve';
+    if (score < 500 || safeDateScore < 45) return 'reject';
+    return 'review';
+}
+
+function buildVerificationEvidence(events: ReputationEventRecord[]): VerificationEvidence[] {
+    return events.slice(0, 10).map((event) => ({
+        id: event.event_id,
+        type: 'reputation_event',
+        uri: `credverse://reputation/events/${event.id}`,
+        verified_at: event.occurred_at,
+        metadata: {
+            category: event.category,
+            signal_type: event.signal_type,
+            platform_id: event.platform_id,
+            score: event.score,
+        },
+    }));
+}
+
+async function buildCandidateVerificationSummary(userId: number): Promise<CandidateVerificationSummary> {
+    const { reputationScore, safeDate } = await buildSafeDateSnapshot(userId);
+    const recentEvents = listReputationEvents(userId);
+
+    const confidence = Math.max(0.5, Math.min(0.99, Number((reputationScore.score / 1000).toFixed(2))));
+    const riskScore = Number((1 - confidence).toFixed(2));
+
+    const normalizedReasonCodes = safeDate.reason_codes.map(normalizeReasonCode);
+    const reasonCodes: ReasonCode[] =
+        normalizedReasonCodes.length > 0
+            ? normalizedReasonCodes
+            : ['MANUAL_REVIEW_REQUIRED'];
+
+    return {
+        candidate_id: `candidate_wallet_user_${userId}`,
+        decision: mapVerificationDecision(reputationScore.score, safeDate.score, safeDate.reason_codes),
+        confidence,
+        risk_score: riskScore,
+        reason_codes: reasonCodes,
+        work_score: {
+            score: reputationScore.score,
+            max_score: 1000,
+            computed_at: reputationScore.computed_at,
+            breakdown: reputationScore.category_breakdown.map((entry) => ({
+                ...entry,
+                weight: normalizeBreakdownWeight(entry.weight),
+            })),
+        },
+        evidence: buildVerificationEvidence(recentEvents),
+    };
+}
+
+async function buildSafeDateSnapshot(userId: number): Promise<{ reputationScore: ReputationScoreContract; safeDate: SafeDateScoreContract }> {
+    const trustSdk = createTrustSdkClient();
+    if (trustSdk) {
+        try {
+            const [reputationScore, safeDate] = await Promise.all([
+                trustSdk.getReputationScore({ userId }),
+                trustSdk.getSafeDateScore({ userId }),
+            ]);
+            return { reputationScore, safeDate };
+        } catch (error) {
+            console.warn('[reputation] Trust SDK fetch failed, using local fallback:', (error as Error)?.message || error);
+        }
+    }
+
     const reputationScore = calculateReputationScore(userId);
     const user = await storage.getUser(userId);
     const liveness = livenessService.getUserLivenessStatus(String(userId));
@@ -146,7 +243,7 @@ router.post('/events', async (req: Request, res: Response) => {
 router.get('/score', async (req: Request, res: Response) => {
     try {
         const userId = parseUserId(req.query.userId || 1);
-        const reputationScore = calculateReputationScore(userId);
+        const { reputationScore } = await buildSafeDateSnapshot(userId);
 
         return res.json({
             success: true,
@@ -177,6 +274,27 @@ router.get('/safedate', async (req: Request, res: Response) => {
         return res.status(400).json({
             success: false,
             error: error?.message || 'Failed to calculate SafeDate score',
+        });
+    }
+});
+
+/**
+ * GET /api/reputation/summary
+ * Return full CandidateVerificationSummary contract from backend.
+ */
+router.get('/summary', async (req: Request, res: Response) => {
+    try {
+        const userId = parseUserId(req.query.userId || 1);
+        const candidateSummary = await buildCandidateVerificationSummary(userId);
+
+        return res.json({
+            success: true,
+            candidate_summary: candidateSummary,
+        });
+    } catch (error: any) {
+        return res.status(400).json({
+            success: false,
+            error: error?.message || 'Failed to calculate candidate verification summary',
         });
     }
 });

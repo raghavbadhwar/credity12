@@ -27,6 +27,25 @@ type GenerateProofInput = {
   issuerBaseUrl?: string;
 };
 
+const SUPPORTED_ZK_CIRCUITS = new Set(['score_threshold', 'age_verification', 'cross_vertical_aggregate']);
+
+function extractZkHookMetadata(request: ProofGenerationRequestContract): Record<string, unknown> | null {
+  const metadata = request.metadata;
+  if (!metadata || typeof metadata !== 'object') return null;
+  const zk = (metadata as Record<string, unknown>).zk;
+  if (!zk || typeof zk !== 'object') return null;
+
+  const circuit = (zk as Record<string, unknown>).circuit;
+  if (typeof circuit !== 'string' || !SUPPORTED_ZK_CIRCUITS.has(circuit)) {
+    return null;
+  }
+
+  return {
+    circuit,
+    schema: 'credity.zk-hook/v1',
+  };
+}
+
 function toObjectPayload(credential: CredentialLike): Record<string, unknown> {
   if (credential.credentialData && typeof credential.credentialData === 'object') {
     return credential.credentialData;
@@ -76,6 +95,7 @@ export function generateProof({ request, credential, issuerBaseUrl }: GeneratePr
   );
 
   const createdAt = new Date().toISOString();
+  const zkHook = extractZkHookMetadata(request);
   const proof = {
     type: 'credity.merkle-membership-proof/v1',
     verification_contract: 'credity-proof-verification/v1',
@@ -91,6 +111,7 @@ export function generateProof({ request, credential, issuerBaseUrl }: GeneratePr
     claims_digest: claimsDigest,
     leaf_hash: leafHash,
     verification_endpoint: `${issuerBaseUrl || ''}/api/v1/proofs/verify`.replace(/\/\/+/, '/').replace(':/', '://'),
+    zk_hook: zkHook,
   };
 
   return {

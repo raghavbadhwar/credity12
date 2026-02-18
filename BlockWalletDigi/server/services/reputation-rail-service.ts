@@ -1,13 +1,13 @@
 import { createHash, randomUUID } from 'crypto';
+import type {
+    ReputationCategoryContract,
+    ReputationEventContract,
+    ReputationCategoryBreakdownContract,
+    ReputationScoreContract,
+    SafeDateScoreContract,
+} from '@credverse/shared-auth';
 
-export type ReputationCategory =
-    | 'transport'
-    | 'accommodation'
-    | 'delivery'
-    | 'employment'
-    | 'finance'
-    | 'social'
-    | 'identity';
+export type ReputationCategory = ReputationCategoryContract;
 
 export interface ReputationEventInput {
     event_id?: string;
@@ -20,52 +20,17 @@ export interface ReputationEventInput {
     metadata?: Record<string, unknown>;
 }
 
-export interface ReputationEventRecord {
-    id: string;
-    event_id: string;
-    user_id: number;
-    platform_id: string;
-    category: ReputationCategory;
-    signal_type: string;
-    score: number;
-    occurred_at: string;
-    metadata: Record<string, unknown>;
-    created_at: string;
+export type ReputationEventRecord = ReputationEventContract & {
     dedupe_key: string;
-}
+};
 
-export interface ReputationCategoryBreakdown {
-    category: ReputationCategory;
-    weight: number;
-    score: number;
-    weighted_score: number;
-    event_count: number;
-}
+export type ReputationCategoryBreakdown = ReputationCategoryBreakdownContract;
 
-export interface ReputationScoreSnapshot {
-    user_id: number;
-    score: number; // 0-1000
-    event_count: number;
-    category_breakdown: ReputationCategoryBreakdown[];
-    computed_at: string;
-}
+export type ReputationScoreSnapshot = ReputationScoreContract;
 
-export interface SafeDateBreakdown {
-    identity_verified_points: number;
-    liveness_points: number;
-    background_clean_points: number;
-    cross_platform_reputation_points: number;
-    social_validation_points: number;
-    harassment_free_points: number;
-}
+export type SafeDateBreakdown = SafeDateScoreContract['breakdown'];
 
-export interface SafeDateScoreSnapshot {
-    user_id: number;
-    score: number; // 0-100
-    breakdown: SafeDateBreakdown;
-    computed_at: string;
-    reason_codes: string[];
-}
+export type SafeDateScoreSnapshot = SafeDateScoreContract;
 
 export interface SafeDateInputs {
     identityVerified: boolean;

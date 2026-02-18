@@ -17,7 +17,8 @@ import {
   Loader2,
   Bell,
   RefreshCw,
-  Camera
+  Camera,
+  BadgeCheck
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { ShareModal } from "@/components/share-modal";
@@ -113,6 +114,7 @@ export default function Dashboard() {
     { icon: FileText, label: "My Credentials", href: "/profile" },
     { icon: QrCode, label: "Share via QR", action: () => { if (credentials[0]) { setSelectedCred(credentials[0]); setShareModalOpen(true); } } },
     { icon: Plus, label: "Add Credential", href: "/receive" },
+    { icon: BadgeCheck, label: "Trust Preview", href: "/reputation-preview" },
     { icon: Settings, label: "Settings", href: "/settings" },
   ];
 
@@ -193,7 +195,7 @@ export default function Dashboard() {
             <TrustScoreCard />
 
             {/* Quick Access Buttons */}
-            <div className="grid grid-cols-4 gap-4">
+            <div className="grid grid-cols-5 gap-4">
               {quickActions.map((action, idx) => (
                 <motion.div
                   key={idx}

@@ -33,11 +33,25 @@ describe('recruiter instant verify contract adapter', () => {
     expect(Array.isArray(res.body.risk_signals)).toBe(true);
     expect(Array.isArray(res.body.evidence_links)).toBe(true);
 
+    expect(res.body.candidate_summary).toBeDefined();
+    expect(typeof res.body.candidate_summary.candidate_id).toBe('string');
+    expect(['approve', 'review', 'investigate', 'reject']).toContain(res.body.candidate_summary.decision);
+    expect(Array.isArray(res.body.candidate_summary.reason_codes)).toBe(true);
+
     // v1 adapter mirror
     expect(Array.isArray(res.body.v1.reason_codes)).toBe(true);
     expect(res.body.v1.risk_signals_version).toBe('risk-v1');
     expect(Array.isArray(res.body.v1.risk_signals)).toBe(true);
     expect(Array.isArray(res.body.v1.evidence_links)).toBe(true);
+
+    // Candidate summary contract for wallet/issuer interoperability
+    expect(res.body.candidate_summary).toBeDefined();
+    expect(typeof res.body.candidate_summary.candidate_id).toBe('string');
+    expect(['approve', 'review', 'investigate', 'reject']).toContain(res.body.candidate_summary.decision);
+    expect(typeof res.body.candidate_summary.confidence).toBe('number');
+    expect(typeof res.body.candidate_summary.risk_score).toBe('number');
+    expect(Array.isArray(res.body.candidate_summary.reason_codes)).toBe(true);
+    expect(typeof res.body.candidate_summary.work_score?.score).toBe('number');
 
     // Each risk signal normalized shape
     for (const signal of res.body.risk_signals) {

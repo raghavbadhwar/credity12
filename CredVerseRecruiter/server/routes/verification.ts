@@ -6,8 +6,13 @@ import { storage, VerificationRecord } from '../storage';
 import crypto from 'crypto';
 import { idempotencyMiddleware, PostgresStateStore, signWebhook } from '@credverse/shared-auth';
 import type {
+    CandidateVerificationSummary,
     ProofVerificationRequestContract,
+    ReasonCode,
+    VerificationDecision,
+    VerificationEvidence,
     VerificationResultContract,
+    WorkScoreBreakdown,
 } from '@credverse/shared-auth';
 import { deterministicHash, deterministicHashLegacyTopLevel, parseCanonicalization, parseProofAlgorithm } from '../services/proof-lifecycle';
 import { verifyProofContract, ProofVerificationError } from '../services/proof-verifier-service';
@@ -213,6 +218,94 @@ function mapDecision(recommendation: string | undefined): VerificationResultCont
     }
 }
 
+
+function isUnsignedOrScannedCredential(credentialData: Record<string, unknown> | null): boolean {
+    if (!credentialData) return false;
+    const hasCryptographicProof = Boolean((credentialData as any).proof || (credentialData as any).signature);
+    if (!hasCryptographicProof) return true;
+
+    const scanHints = [
+        (credentialData as any).scanned,
+        (credentialData as any).scanResult,
+        (credentialData as any).scanSource,
+        (credentialData as any).documentScan,
+        (credentialData as any).ocr,
+    ];
+
+    return scanHints.some((value) => {
+        if (value === true) return true;
+        if (typeof value === 'string') {
+            const lowered = value.toLowerCase();
+            return lowered.includes('scan') || lowered.includes('ocr');
+        }
+        return false;
+    });
+}
+
+function applyLockedVerificationDecisionPolicy(input: {
+    riskFlags: string[];
+    recommendation?: string;
+    credentialData: Record<string, unknown> | null;
+}): VerificationResultContract['decision'] {
+    if (input.riskFlags.includes('INVALID_SIGNATURE')) {
+        return 'reject';
+    }
+    if (isUnsignedOrScannedCredential(input.credentialData)) {
+        return 'review';
+    }
+    return mapDecision(input.recommendation);
+}
+
+function toCandidateDecision(decision: VerificationResultContract['decision']): VerificationDecision {
+    return decision;
+}
+
+function buildCandidateSummaryContract(input: {
+    candidateId: string;
+    verificationResult: { confidence: number; riskScore: number; timestamp: Date; checks: Array<{ name: string; status: string }>; riskFlags: string[] };
+    decision: VerificationResultContract['decision'];
+    issuer?: string;
+}): CandidateVerificationSummary {
+    const confidence = Number(Math.max(0, Math.min(1, input.verificationResult.confidence)).toFixed(2));
+    const risk_score = Number((Math.max(0, Math.min(100, input.verificationResult.riskScore)) / 100).toFixed(2));
+    const score = Math.max(0, Math.min(1000, Math.round(confidence * 1000)));
+
+    const breakdown: WorkScoreBreakdown[] = input.verificationResult.checks.map((check) => ({
+        category: String(check.name || 'verification').toLowerCase().replace(/\s+/g, '_'),
+        weight: Number((1 / Math.max(input.verificationResult.checks.length, 1)).toFixed(2)),
+        score: check.status === 'passed' ? 100 : check.status === 'warning' ? 60 : 20,
+        weighted_score: check.status === 'passed' ? 100 : check.status === 'warning' ? 60 : 20,
+        event_count: 1,
+    }));
+
+    const evidence: VerificationEvidence[] = [
+        {
+            id: `verification-${input.verificationResult.timestamp.getTime()}`,
+            type: 'external_check',
+            issuer: input.issuer,
+            metadata: {
+                risk_flags: input.verificationResult.riskFlags,
+            },
+            verified_at: input.verificationResult.timestamp.toISOString(),
+        },
+    ];
+
+    return {
+        candidate_id: input.candidateId,
+        decision: toCandidateDecision(input.decision),
+        confidence,
+        risk_score,
+        reason_codes: input.verificationResult.riskFlags as ReasonCode[],
+        work_score: {
+            score,
+            max_score: 1000,
+            computed_at: input.verificationResult.timestamp.toISOString(),
+            breakdown,
+        },
+        evidence,
+    };
+}
+
 async function emitVerificationWebhook(event: string, payload: Record<string, unknown>): Promise<void> {
     const targetUrl = process.env.VERIFICATION_WEBHOOK_URL;
     if (!targetUrl) return;
@@ -350,11 +443,25 @@ router.post('/verify/instant', writeIdempotency, async (req, res) => {
             reason_codes: [code],
         }));
 
+        const lockedDecision = applyLockedVerificationDecisionPolicy({
+            riskFlags: verificationResult.riskFlags,
+            recommendation: fraudAnalysis.recommendation,
+            credentialData,
+        });
+
+        const candidateSummary = buildCandidateSummaryContract({
+            candidateId: readSubjectName(credentialData) || verificationResult.verificationId,
+            verificationResult,
+            decision: lockedDecision,
+            issuer: readIssuer(credentialData),
+        });
+
         const responseBody = {
             success: true,
             verification: verificationResult,
             fraud: fraudAnalysis,
             record,
+            candidate_summary: candidateSummary,
             reason_codes: reasonCodes,
             risk_signals_version: 'risk-v1',
             risk_signals: riskSignals,
@@ -369,7 +476,7 @@ router.post('/verify/instant', writeIdempotency, async (req, res) => {
                 anchor_validity: verificationResult.riskFlags.includes('NO_BLOCKCHAIN_ANCHOR') ? 'pending' : 'anchored',
                 fraud_score: fraudAnalysis.score,
                 fraud_explanations: fraudAnalysis.flags,
-                decision: fraudAnalysis.recommendation,
+                decision: lockedDecision,
                 decision_reason_codes: verificationResult.riskFlags,
             },
         };
@@ -775,6 +882,12 @@ router.post('/v1/verifications/instant', authMiddleware, writeIdempotency, async
         };
         await storage.addVerification(record);
 
+        const lockedDecision = applyLockedVerificationDecisionPolicy({
+            riskFlags: verificationResult.riskFlags,
+            recommendation: fraudAnalysis.recommendation,
+            credentialData,
+        });
+
         const contractResult: VerificationResultContract = {
             id: verificationResult.verificationId,
             credential_validity: mapCredentialValidity(verificationResult.status),
@@ -782,12 +895,20 @@ router.post('/v1/verifications/instant', authMiddleware, writeIdempotency, async
             anchor_validity: mapAnchorValidity(verificationResult.riskFlags),
             fraud_score: fraudAnalysis.score,
             fraud_explanations: fraudAnalysis.flags,
-            decision: mapDecision(fraudAnalysis.recommendation),
+            decision: lockedDecision,
             decision_reason_codes: verificationResult.riskFlags,
         };
 
+        const candidateSummary = buildCandidateSummaryContract({
+            candidateId: readSubjectName(credentialData) || verificationResult.verificationId,
+            verificationResult,
+            decision: lockedDecision,
+            issuer: readIssuer(credentialData),
+        });
+
         res.json({
             ...contractResult,
+            candidate_summary: candidateSummary,
             verification_id: contractResult.id,
             checks: verificationResult.checks,
         });

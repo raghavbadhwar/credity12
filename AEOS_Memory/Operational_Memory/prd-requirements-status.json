@@ -194,6 +194,11 @@
     "platform-connections::queue-of-unapproved-requests": "NOT_STARTED",
     "platform-connections::approve-deny-actions": "NOT_STARTED",
     "platform-connections::bulk-actions-approve-all-deny-all": "NOT_STARTED",
-    "platform-connections::request-expiry-24-hours": "NOT_STARTED"
+    "platform-connections::request-expiry-24-hours": "NOT_STARTED",
+    "identity-verification-complete-flow::real-time-3d-face-mapping-with-depth-analysis": "NOT_STARTED",
+    "identity-verification-complete-flow::challenge-response-smile-turn-head-for-anti-spoofing": "NOT_STARTED",
+    "identity-verification-complete-flow::neural-network-powered-fraud-detection-masks-photos-screens": "NOT_STARTED",
+    "identity-verification-complete-flow::30-second-duration-with-haptic-feedback-and-visual-mesh-overlay": "NOT_STARTED",
+    "identity-verification-complete-flow::auto-capture-with-signature-generated-confirmation-animation": "NOT_STARTED"
   }
 }

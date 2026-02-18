@@ -21,5 +21,26 @@
 ### High-confidence NOT_STARTED / Out-of-scope for current repo state
 - Reputation Rail (cross-platform trust), SafeDate, Gig onboarding packs (PRD sections are specified but not evidenced as shipped).
 
+## Update Snapshot (2026-02-17)
+- Status: **Execution resumed under 60h full-PRD push** with new evidence on Reputation/SafeDate lanes.
+
+### Newly evidenced PARTIAL progress
+- **Reputation Rail (Cross-Platform Trust)**
+  - Issuer: Neo4j-backed graph service implementation and route integration (`/reputation/events` graph writes + `/reputation/graph/snapshot`).
+  - Evidence:
+    - `CredVerseIssuer 3/tests/reputation-graph.test.ts`
+    - `CredVerseIssuer 3/tests/reputation-graph-event-mapper.test.ts`
+    - `CredVerseIssuer 3/tests/reputation-route-graph.test.ts`
+- **SafeDate Score (Dating Safety Layer)**
+  - Wallet: backend summary and safe-date flows now support trust-sdk live path with deterministic local fallback.
+  - Evidence:
+    - `BlockWalletDigi/tests/reputation-route-summary.test.ts`
+    - `BlockWalletDigi/tests/reputation-preview-fallback.test.ts`
+    - `BlockWalletDigi/tests/reputation-rail.test.ts`
+
+### Validation commands (recent)
+- `cd "CredVerseIssuer 3" && npm test -- tests/reputation-*.test.ts && npm run check`
+- `cd BlockWalletDigi && npm test -- tests/reputation-route-summary.test.ts tests/reputation-preview-fallback.test.ts tests/reputation-rail.test.ts && npm run check`
+
 ## Next step
 - Build a **PRD feature tracker** CSV + JSON (feature → status → evidence link) and render it as a KPI on the Ops dashboard.
