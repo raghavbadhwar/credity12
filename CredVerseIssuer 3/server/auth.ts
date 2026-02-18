@@ -40,6 +40,13 @@ function readOptionalString(value: unknown): string | undefined {
 
 async function resolveApiKeyTenant(keyHeader: string): Promise<{ tenantId: string; keyHash: string; error?: string }> {
     const keyHash = keyHeader;
+
+    // Static operator key via env var — for smoke tests and automated issuance
+    const operatorKey = process.env.OPERATOR_API_KEY;
+    if (operatorKey && keyHeader === operatorKey) {
+        return { tenantId: "operator", keyHash };
+    }
+
     const apiKey = await storage.getApiKey(keyHash);
     if (!apiKey) {
         return { tenantId: "", keyHash, error: "Invalid API Key" };
