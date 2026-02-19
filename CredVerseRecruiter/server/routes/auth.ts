@@ -3,6 +3,7 @@ import { storage } from '../storage';
 import {
     hashPassword,
     comparePassword,
+    validatePasswordStrength,
     generateAccessToken,
     generateRefreshToken,
     refreshAccessToken,
@@ -36,6 +37,12 @@ router.post('/auth/register', async (req, res) => {
         const existing = await storage.getUserByUsername(username);
         if (existing) {
             return res.status(409).json({ error: 'Username already exists' });
+        }
+
+        // Validate password strength
+        const passwordCheck = validatePasswordStrength(password);
+        if (!passwordCheck.isValid) {
+            return res.status(400).json({ error: 'Password too weak', details: passwordCheck.errors });
         }
 
         // Hash password
