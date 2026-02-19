@@ -28,7 +28,7 @@ describe('Auth Integration API', () => {
             .post('/api/v1/auth/register')
             .send({
                 username: 'integration_user',
-                password: 'securepassword',
+                password: 'SecurePass123!',
                 role: 'issuer'
             });
 
@@ -41,12 +41,12 @@ describe('Auth Integration API', () => {
         // Register first
         await request(app)
             .post('/api/v1/auth/register')
-            .send({ username: 'login_user', password: 'password123' });
+            .send({ username: 'login_user', password: 'SecurePass123!' });
 
         // Login
         const res = await request(app)
             .post('/api/v1/auth/login')
-            .send({ username: 'login_user', password: 'password123' });
+            .send({ username: 'login_user', password: 'SecurePass123!' });
 
         expect(res.status).toBe(200);
         expect(res.body.tokens).toBeDefined();
