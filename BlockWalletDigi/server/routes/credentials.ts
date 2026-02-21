@@ -4,6 +4,7 @@ import { walletService } from "../services/wallet-service";
 import { storage } from "../storage";
 import { authMiddleware } from "../services/auth-service";
 import { sanitizeUnsafeMetadata } from "../utils/metadata-sanitizer";
+import { walletOssBridge } from "../services/oss/wallet-oss-bridge";
 
 const router = Router();
 
@@ -264,25 +265,24 @@ router.post("/wallet/offer/claim", authMiddleware, async (req, res) => {
       decodedPayload?.vc?.type?.[1] ||
       "Verified Credential";
 
-    // Store in wallet
-    // For demo determinism, prefer storing the decoded VC-JWT payload (so selective disclosure works on the VC shape)
-    // while also preserving the original JWT for recruiter verification.
-    const stored = await walletService.storeCredential(userId, {
-      type: ["VerifiableCredential", credType],
-      issuer: issuerName,
-      issuanceDate: credData.createdAt
-        ? new Date(credData.createdAt)
-        : new Date(),
-      data: sanitizeUnsafeMetadata({
-        ...(decodedPayload || credData),
-        proof:
-          proofMeta ||
-          (decodedPayload as any)?.proof ||
-          (credData as any)?.proof,
-      }),
-      jwt: vcJwt,
-      category: "academic", // Default category
+    const sanitizedPayload = sanitizeUnsafeMetadata({
+      ...(decodedPayload || credData),
+      proof:
+        proofMeta ||
+        (decodedPayload as any)?.proof ||
+        (credData as any)?.proof,
+    }) as Record<string, unknown>;
+
+    const normalizedImport = await walletOssBridge.normalizeImportedCredential({
+      vcJwt,
+      credentialPayload: sanitizedPayload,
+      issuerHint: issuerName,
+      typeHint: credType,
+      categoryHint: "academic",
+      proof: (proofMeta as Record<string, unknown> | null) || null,
     });
+
+    const stored = await walletService.storeCredential(userId, normalizedImport);
 
     // Log activity
     await storage.createActivity({

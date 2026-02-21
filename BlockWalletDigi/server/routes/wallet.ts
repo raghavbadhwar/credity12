@@ -5,6 +5,7 @@ import { didService } from "../services/did-service";
 import { storage } from "../storage";
 import { authMiddleware, hashPassword } from "../services/auth-service";
 import { getAuthenticatedUserId } from "../utils/authz";
+import { walletOssBridge } from "../services/oss/wallet-oss-bridge";
 
 const router = Router();
 
@@ -88,6 +89,24 @@ router.get("/wallet/status", authMiddleware, async (req, res) => {
         error: "Failed to get wallet status",
         code: "WALLET_STATUS_FAILED",
       });
+  }
+});
+
+/**
+ * Wallet OSS base status (migration-safe capability surface)
+ */
+router.get("/wallet/oss/capabilities", authMiddleware, async (_req, res) => {
+  try {
+    const capabilities = walletOssBridge.getCapabilities();
+    res.json({
+      success: true,
+      capabilities,
+    });
+  } catch (error) {
+    console.error("Wallet OSS capability error:", error);
+    res
+      .status(500)
+      .json({ error: "Failed to fetch OSS capabilities", code: "OSS_CAP_FAILED" });
   }
 });
 
