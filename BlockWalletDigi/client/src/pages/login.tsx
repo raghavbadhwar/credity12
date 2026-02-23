@@ -11,8 +11,20 @@ export default function LoginPage() {
   const handleBiometricLogin = () => {
     setIsAuthenticating(true);
     setTimeout(() => {
+      const existing = localStorage.getItem("wallet_session");
+      if (!existing) {
+        const session = {
+          userId: crypto.randomUUID(),
+          createdAt: new Date().toISOString(),
+          authMethod: "biometric-sim",
+        };
+        localStorage.setItem("wallet_session", JSON.stringify(session));
+      }
+      if (!localStorage.getItem("wallet_setup_complete")) {
+        localStorage.setItem("wallet_setup_complete", "false");
+      }
       setLocation("/");
-    }, 1500);
+    }, 800);
   };
 
   return (

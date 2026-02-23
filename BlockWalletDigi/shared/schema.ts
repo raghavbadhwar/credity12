@@ -9,6 +9,7 @@ import {
   uuid,
   decimal,
   varchar,
+  unique,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -185,6 +186,8 @@ export const subscriptions = pgTable("subscriptions", {
   // "active" | "cancelled" | "past_due" | "trialing"
   razorpaySubscriptionId: text("razorpay_subscription_id").unique(),
   razorpayCustomerId: text("razorpay_customer_id"),
+  razorpayOrderId: text("razorpay_order_id"),
+  razorpayPaymentId: text("razorpay_payment_id"),
   currentPeriodStart: timestamp("current_period_start"),
   currentPeriodEnd: timestamp("current_period_end"),
   cancelledAt: timestamp("cancelled_at"),
@@ -225,6 +228,32 @@ export type InsertSubscription = typeof subscriptions.$inferInsert;
 
 export type ApiUsage = typeof apiUsage.$inferSelect;
 export type InsertApiUsage = typeof apiUsage.$inferInsert;
+
+export const devicePushTokens = pgTable("device_push_tokens", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull(),
+  token: text("token").notNull().unique(),
+  deviceType: varchar("device_type", { length: 20 }).notNull(),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const erasureAuditLog = pgTable("erasure_audit_log", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  hashedUserRef: text("hashed_user_ref").notNull(),
+  requestedAt: timestamp("requested_at").notNull().defaultNow(),
+  completedAt: timestamp("completed_at").notNull().defaultNow(),
+  fieldsErased: jsonb("fields_erased").notNull().default([]),
+  reason: text("reason"),
+  metadata: jsonb("metadata"),
+});
+
+export type DevicePushToken = typeof devicePushTokens.$inferSelect;
+export type InsertDevicePushToken = typeof devicePushTokens.$inferInsert;
+
+export type ErasureAuditEntry = typeof erasureAuditLog.$inferSelect;
+export type InsertErasureAuditEntry = typeof erasureAuditLog.$inferInsert;
 
 // ── Platform OAuth connections (Agent 5 — PRD §5.7, §5.8) ─────────────────────
 
@@ -290,3 +319,117 @@ export type NewReputationScore = typeof reputationScores.$inferInsert;
 
 export type SafeDateScore = typeof safeDateScores.$inferSelect;
 export type NewSafeDateScore = typeof safeDateScores.$inferInsert;
+
+// ---------------------------------------------------------------------------
+// Palm Biometric Enrollments
+// ---------------------------------------------------------------------------
+
+export const palmScanEnrollments = pgTable("palm_scan_enrollments", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull(),
+  embeddingHash: varchar("embedding_hash", { length: 128 }).notNull(),
+  zkCommitment: varchar("zk_commitment", { length: 128 }).notNull().unique(),
+  encryptedSalt: jsonb("encrypted_salt").notNull(), // { ciphertext, iv, authTag }
+  enrollmentMethod: varchar("enrollment_method", { length: 32 }).notNull().default("mobile_palm"),
+  qualityScore: integer("quality_score").notNull().default(0),
+  sybilScore: integer("sybil_score").notNull().default(100),
+  isActive: boolean("is_active").notNull().default(true),
+  enrolledAt: timestamp("enrolled_at").defaultNow(),
+  deactivatedAt: timestamp("deactivated_at"),
+});
+
+export type PalmScanEnrollment = typeof palmScanEnrollments.$inferSelect;
+export type NewPalmScanEnrollment = typeof palmScanEnrollments.$inferInsert;
+
+// ---------------------------------------------------------------------------
+// Human IDs
+// ---------------------------------------------------------------------------
+
+export const humanIds = pgTable("human_ids", {
+  id: serial("id").primaryKey(),
+  humanIdHash: varchar("human_id_hash", { length: 128 }).notNull().unique(),
+  userId: integer("user_id").notNull(),
+  palmScanId: integer("palm_scan_id").notNull(),
+  zkCommitment: varchar("zk_commitment", { length: 128 }).notNull(),
+  vcJws: text("vc_jws").notNull(),
+  ipfsCid: varchar("ipfs_cid", { length: 128 }),
+  txHash: varchar("tx_hash", { length: 128 }),
+  chainId: integer("chain_id").notNull().default(80002),
+  contractAddress: varchar("contract_address", { length: 64 }),
+  status: varchar("status", { length: 20 }).notNull().default("pending"),
+  issuedAt: timestamp("issued_at").defaultNow(),
+  expiresAt: timestamp("expires_at").notNull(),
+  revokedAt: timestamp("revoked_at"),
+  metadata: jsonb("metadata"),
+});
+
+export type HumanId = typeof humanIds.$inferSelect;
+export type NewHumanId = typeof humanIds.$inferInsert;
+
+// ---------------------------------------------------------------------------
+// WebAuthn Biometric Challenges  (Agent 3)
+// ---------------------------------------------------------------------------
+
+export const webauthnChallenges = pgTable("webauthn_challenges", {
+  id: serial("id").primaryKey(),
+  challengeId: varchar("challenge_id", { length: 64 }).notNull().unique(),
+  userId: integer("user_id").notNull(),
+  challenge: text("challenge").notNull(),
+  rpId: varchar("rp_id", { length: 255 }).notNull(),
+  type: varchar("type", { length: 20 }).notNull(), // 'registration' | 'authentication'
+  expiresAt: timestamp("expires_at").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export type WebAuthnChallenge = typeof webauthnChallenges.$inferSelect;
+export type NewWebAuthnChallenge = typeof webauthnChallenges.$inferInsert;
+
+// ---------------------------------------------------------------------------
+// WebAuthn Biometric Enrollments  (Agent 3)
+// ---------------------------------------------------------------------------
+
+export const webauthnEnrollments = pgTable("webauthn_enrollments", {
+  id: serial("id").primaryKey(),
+  enrollmentId: varchar("enrollment_id", { length: 64 }).notNull().unique(),
+  userId: integer("user_id").notNull(),
+  credentialId: varchar("credential_id", { length: 512 }).notNull().unique(),
+  encryptedCredentialPublicKey: text("encrypted_credential_public_key").notNull(),
+  credentialPublicKeyHash: varchar("credential_public_key_hash", { length: 128 }).notNull().unique(),
+  counter: integer("counter").notNull().default(0),
+  deviceType: varchar("device_type", { length: 50 }).notNull(),
+  backedUp: boolean("backed_up").notNull().default(false),
+  transports: jsonb("transports").notNull().default(["internal"]),
+  biometricMethod: varchar("biometric_method", { length: 30 }).notNull(), // 'fingerprint' | 'face_id' | 'passkey_platform'
+  zkCommitment: varchar("zk_commitment", { length: 128 }).notNull().unique(),
+  encryptedSalt: text("encrypted_salt").notNull(),
+  userAgent: text("user_agent"),
+  enrolledAt: timestamp("enrolled_at").defaultNow(),
+  lastUsedAt: timestamp("last_used_at"),
+  isActive: boolean("is_active").notNull().default(true),
+});
+
+export type WebAuthnEnrollment = typeof webauthnEnrollments.$inferSelect;
+export type NewWebAuthnEnrollment = typeof webauthnEnrollments.$inferInsert;
+
+// ---------------------------------------------------------------------------
+// Biometric Device Keys  (Agent 3 — Stamp Fallback Auth)
+// ---------------------------------------------------------------------------
+
+export const biometricDeviceKeys = pgTable(
+  "biometric_device_keys",
+  {
+    id: serial("id").primaryKey(),
+    userId: integer("user_id").notNull(),
+    deviceId: varchar("device_id", { length: 128 }).notNull(),
+    deviceSecretEnc: jsonb("device_secret_enc").notNull(), // AES-256-GCM encrypted { ciphertext, iv, authTag }
+    createdAt: timestamp("created_at").defaultNow(),
+    lastUsedAt: timestamp("last_used_at"),
+    revokedAt: timestamp("revoked_at"),
+  },
+  (t) => ({
+    userDeviceUniq: unique().on(t.userId, t.deviceId),
+  }),
+);
+
+export type BiometricDeviceKey = typeof biometricDeviceKeys.$inferSelect;
+export type NewBiometricDeviceKey = typeof biometricDeviceKeys.$inferInsert;

@@ -1,6 +1,6 @@
 // Initialize Sentry BEFORE importing anything else
 import { initSentry, sentryErrorHandler } from "./services/sentry";
-initSentry("credverse-wallet");
+initSentry("credity-wallet");
 
 // Initialize PostHog Analytics
 import { initAnalytics } from "./services/analytics";
@@ -10,8 +10,8 @@ import helmet from "helmet";
 import cors from "cors";
 import { errorHandler } from "./middleware/error-handler";
 import { deviceFingerprintMiddleware } from "./middleware/device-fingerprint";
-import { setupSecurity } from "@credverse/shared-auth";
-import { initAuth } from "@credverse/shared-auth";
+import { setupSecurity } from "@credity/shared-auth";
+import { initAuth } from "@credity/shared-auth";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
@@ -73,8 +73,8 @@ app.use(
 );
 
 app.use(express.urlencoded({ extended: false, limit: "10mb" }));
-app.use(telemetryMiddleware("credverse-wallet"));
-app.get("/api/metrics", metricsHandler("credverse-wallet"));
+app.use(telemetryMiddleware("credity-wallet"));
+app.get("/api/metrics", metricsHandler("credity-wallet"));
 
 // Device fingerprinting (Agent 1) — must run before all routes
 app.use(deviceFingerprintMiddleware);

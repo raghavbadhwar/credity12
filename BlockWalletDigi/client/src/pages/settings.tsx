@@ -198,21 +198,20 @@ export default function SettingsPage() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `credverse-backup-${new Date().toISOString().slice(0, 10)}.txt`;
+    a.download = `credity-backup-${new Date().toISOString().slice(0, 10)}.txt`;
     a.click();
     URL.revokeObjectURL(url);
   };
 
   const handleSignOut = () => {
-    // Clear any local session data if used
     localStorage.removeItem("wallet_session");
+    localStorage.removeItem("wallet_setup_complete");
     localStorage.removeItem("did");
     toast({
       title: "Signed Out",
       description: "You have been logged out securely.",
     });
-    // Redirect to login (assuming /login exists, or just home)
-    setLocation("/");
+    setLocation("/login");
   };
 
   const stats = walletStatus?.stats;

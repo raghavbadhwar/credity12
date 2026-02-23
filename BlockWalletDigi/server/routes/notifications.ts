@@ -9,10 +9,70 @@ import {
   getCredentialOffer,
   registerWebhook,
 } from "../services/credential-push-service";
+import { pushNotificationService } from "../services/push-notification-service";
 import { authMiddleware } from "../services/auth-service";
 import { getAuthenticatedUserId } from "../utils/authz";
 
 const router = Router();
+
+router.post("/notifications/register-token", authMiddleware, async (req, res) => {
+  try {
+    const userId = getAuthenticatedUserId(req, res);
+    if (!userId) return;
+
+    const expoPushToken =
+      typeof req.body?.expoPushToken === "string" ? req.body.expoPushToken.trim() : "";
+    const deviceType = req.body?.deviceType;
+    if (!expoPushToken || (deviceType !== "ios" && deviceType !== "android")) {
+      return res.status(400).json({
+        error: "expoPushToken and valid deviceType are required",
+        code: "PUSH_TOKEN_VALIDATION_FAILED",
+      });
+    }
+
+    const token = await pushNotificationService.registerToken(
+      userId,
+      expoPushToken,
+      deviceType,
+    );
+    return res.status(201).json({ success: true, token });
+  } catch (error: any) {
+    if (error?.message === "INVALID_EXPO_PUSH_TOKEN") {
+      return res.status(400).json({
+        error: "Invalid Expo push token",
+        code: "PUSH_TOKEN_VALIDATION_FAILED",
+      });
+    }
+    return res.status(500).json({
+      error: error?.message || "Failed to register push token",
+      code: "PUSH_TOKEN_REGISTER_FAILED",
+    });
+  }
+});
+
+router.post("/notifications/unregister-token", authMiddleware, async (req, res) => {
+  try {
+    const userId = getAuthenticatedUserId(req, res);
+    if (!userId) return;
+
+    const expoPushToken =
+      typeof req.body?.expoPushToken === "string" ? req.body.expoPushToken.trim() : "";
+    if (!expoPushToken) {
+      return res.status(400).json({
+        error: "expoPushToken is required",
+        code: "PUSH_TOKEN_VALIDATION_FAILED",
+      });
+    }
+
+    await pushNotificationService.removeToken(userId, expoPushToken);
+    return res.json({ success: true });
+  } catch (error: any) {
+    return res.status(500).json({
+      error: error?.message || "Failed to unregister push token",
+      code: "PUSH_TOKEN_UNREGISTER_FAILED",
+    });
+  }
+});
 
 // ============== Inbox & Push ==============
 
@@ -192,7 +252,7 @@ router.post("/webhook/register", authMiddleware, async (req, res) => {
       success: true,
       secret,
       message:
-        "Webhook registered. Include X-CredVerse-Signature header with HMAC-SHA256 verification.",
+        "Webhook registered. Include X-Credity-Signature header with HMAC-SHA256 verification.",
     });
   } catch (error: any) {
     res

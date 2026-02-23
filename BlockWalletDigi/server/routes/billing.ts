@@ -12,6 +12,45 @@ const subscribeSchema = z.object({
   email: z.string().email().optional(),
 });
 
+const createOrderSchema = z.object({
+  planId: z.string().min(1),
+});
+
+const verifyPaymentSchema = z.object({
+  orderId: z.string().min(1),
+  paymentId: z.string().min(1),
+  signature: z.string().min(1),
+});
+
+function statusForBillingError(errorMessage: string): number {
+  if (
+    errorMessage === "RAZORPAY_NOT_CONFIGURED" ||
+    errorMessage === "RAZORPAY_WEBHOOK_SECRET_NOT_CONFIGURED"
+  ) {
+    return 503;
+  }
+  if (
+    errorMessage === "INVALID_WEBHOOK_SIGNATURE" ||
+    errorMessage === "MISSING_WEBHOOK_SIGNATURE"
+  ) {
+    return 401;
+  }
+  if (errorMessage === "INVALID_PLAN_ID" || errorMessage === "INVALID_WEBHOOK_PAYLOAD") {
+    return 400;
+  }
+  return 500;
+}
+
+function resolveRawBody(req: any): string | null {
+  if (Buffer.isBuffer(req.rawBody)) {
+    return req.rawBody.toString("utf-8");
+  }
+  if (typeof req.rawBody === "string") {
+    return req.rawBody;
+  }
+  return null;
+}
+
 // ── Routes ──────────────────────────────────────────────────────────────────────
 
 /**
@@ -29,6 +68,69 @@ router.get("/billing/plans", (_req: Request, res: Response) => {
  * POST /billing/subscribe
  * Create a new subscription for the authenticated user.
  */
+router.post(
+  "/billing/create-order",
+  authMiddleware,
+  async (req: Request, res: Response) => {
+    try {
+      const parsed = createOrderSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({
+          error: "Invalid request body",
+          details: parsed.error.flatten().fieldErrors,
+        });
+      }
+      const userId = Number(req.user?.userId);
+      if (!userId) {
+        return res.status(401).json({ error: "User not authenticated" });
+      }
+
+      const result = await billingService.createOrder(userId, parsed.data.planId);
+      return res.status(201).json({ success: true, data: result });
+    } catch (error: any) {
+      const message = error?.message || "Failed to create order";
+      const status = statusForBillingError(message);
+      return res.status(status).json({
+        error: message,
+        ...(status !== 500 ? { code: message } : {}),
+      });
+    }
+  },
+);
+
+router.post(
+  "/billing/verify-payment",
+  authMiddleware,
+  async (req: Request, res: Response) => {
+    try {
+      const parsed = verifyPaymentSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({
+          error: "Invalid request body",
+          details: parsed.error.flatten().fieldErrors,
+        });
+      }
+
+      const result = await billingService.verifyPayment(
+        parsed.data.orderId,
+        parsed.data.paymentId,
+        parsed.data.signature,
+      );
+      if (!result.success) {
+        return res.status(401).json(result);
+      }
+      return res.json(result);
+    } catch (error: any) {
+      const message = error?.message || "Failed to verify payment";
+      const status = statusForBillingError(message);
+      return res.status(status).json({
+        error: message,
+        ...(status !== 500 ? { code: message } : {}),
+      });
+    }
+  },
+);
+
 router.post(
   "/billing/subscribe",
   authMiddleware,
@@ -48,7 +150,7 @@ router.post(
       }
 
       const { plan, email } = parsed.data;
-      const userEmail = email ?? `user_${userId}@credverse.in`;
+      const userEmail = email ?? `user_${userId}@credity.in`;
 
       const result = await billingService.createSubscription(
         userId,
@@ -76,24 +178,27 @@ router.post(
  */
 router.post("/billing/webhook", async (req: Request, res: Response) => {
   try {
-    // req.body may be a Buffer if express.raw() was applied, or a parsed object
-    const rawBody =
-      typeof req.body === "string"
-        ? req.body
-        : Buffer.isBuffer(req.body)
-          ? req.body.toString("utf-8")
-          : JSON.stringify(req.body);
+    const rawBody = resolveRawBody(req as any);
+    if (!rawBody) {
+      return res.status(400).json({
+        error: "RAW_BODY_REQUIRED",
+        code: "RAW_BODY_REQUIRED",
+      });
+    }
 
     const signature = String(req.headers["x-razorpay-signature"] ?? "");
 
-    await billingService.handleWebhook(rawBody, signature);
+    await billingService.createWebhookHandler(rawBody, signature);
 
-    // Razorpay expects 200 regardless of internal processing result
     return res.status(200).json({ received: true });
   } catch (error: any) {
-    console.error("[Billing] Webhook error:", error);
-    // Still return 200 to Razorpay to prevent retries
-    return res.status(200).json({ received: true });
+    const message = error?.message || "Webhook verification failed";
+    const status = statusForBillingError(message);
+    return res.status(status).json({
+      received: false,
+      error: message,
+      ...(status !== 500 ? { code: message } : {}),
+    });
   }
 });
 

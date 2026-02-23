@@ -362,7 +362,7 @@ export async function completeChallenge(
     const sidecarInference = await inferLivenessAndEmbedding({
       frameData: mergedEvidence.frameData,
       challengeType: challenge.type,
-      cameraEvidence: mergedEvidence,
+      cameraEvidence: mergedEvidence as unknown as Record<string, unknown>,
       sessionId: session.id,
       userId: session.userId,
     });

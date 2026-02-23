@@ -204,13 +204,25 @@ export default function IdentityVerification() {
   >({});
   const [pendingCameraStart, setPendingCameraStart] = useState(false);
 
+  const sessionRaw = localStorage.getItem("wallet_session");
+  const sessionUserId = sessionRaw
+    ? (() => {
+        try {
+          return JSON.parse(sessionRaw)?.userId as string | undefined;
+        } catch {
+          return undefined;
+        }
+      })()
+    : undefined;
+  const activeUserId = sessionUserId || "anonymous";
+
   // Fetch verification status
   const { data: status, isLoading } = useQuery<
     { success: boolean } & VerificationStatus
   >({
-    queryKey: ["identity-status"],
+    queryKey: ["identity-status", activeUserId],
     queryFn: async () => {
-      const res = await fetch("/api/identity/status?userId=1");
+      const res = await fetch(`/api/identity/status?userId=${encodeURIComponent(activeUserId)}`);
       return res.json();
     },
     refetchInterval: 5000,
@@ -222,7 +234,7 @@ export default function IdentityVerification() {
       const res = await fetch("/api/identity/liveness/start", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId: "1" }),
+        body: JSON.stringify({ userId: activeUserId }),
       });
       return res.json();
     },
@@ -274,7 +286,7 @@ export default function IdentityVerification() {
         description: "Please authenticate with your device",
       });
 
-      const result = await enrollWithWebAuthn("1", type);
+      const result = await enrollWithWebAuthn(activeUserId, type);
 
       if (result.success) {
         toast({
@@ -311,7 +323,7 @@ export default function IdentityVerification() {
       const res = await fetch("/api/identity/document/scan", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId: "1", imageData, documentType: "auto" }),
+        body: JSON.stringify({ userId: activeUserId, imageData, documentType: "auto" }),
       });
       return res.json();
     },
@@ -401,7 +413,7 @@ export default function IdentityVerification() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          userId: "1",
+          userId: activeUserId,
           passed: true,
           frameData: frameData || undefined,
         }),
@@ -498,7 +510,7 @@ export default function IdentityVerification() {
                 Identity Verification
               </h1>
               <p className="text-muted-foreground max-w-lg">
-                build your reputation across the CredVerse network. Verify your
+                build your reputation across the Credity network. Verify your
                 biometrics and documents to unlock high-trust services.
               </p>
             </div>

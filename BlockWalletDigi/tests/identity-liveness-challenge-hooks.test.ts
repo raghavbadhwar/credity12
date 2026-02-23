@@ -64,6 +64,35 @@ describe("identity liveness camera challenge-response hooks", () => {
     expect(result.body.result.completedChallenges).toBe(3);
   });
 
+  it("supports versioned envelope and legacy mobile completed payload", async () => {
+    const app = express();
+    app.use(express.json());
+    app.use("/api/v1/identity", identityRoutes);
+
+    const start = await request(app)
+      .post("/api/v1/identity/liveness/start")
+      .set("x-api-version", "2")
+      .send({ userId: "u-live-legacy" });
+
+    expect(start.status).toBe(200);
+    expect(start.body.contractVersion).toBe("identity.v2");
+    const sessionId = start.body.data.sessionId as string;
+    const firstChallenge = start.body.data.challenges[0];
+
+    const legacyStep = await request(app)
+      .post("/api/v1/identity/liveness/challenge")
+      .set("x-api-version", "2")
+      .send({
+        sessionId,
+        challengeId: firstChallenge.id,
+        completed: true,
+      });
+
+    expect(legacyStep.status).toBe(200);
+    expect(legacyStep.body.success).toBe(true);
+    expect(legacyStep.body.data).toBeTruthy();
+  });
+
   it("rejects spoof/high-risk challenge evidence", async () => {
     const app = express();
     app.use(express.json());
