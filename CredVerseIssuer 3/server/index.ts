@@ -13,7 +13,6 @@ import { errorHandler } from "./middleware/error-handler";
 import {
   apiRateLimiter,
   hppProtection,
-  sanitizationMiddleware,
   requestIdMiddleware,
   additionalSecurityHeaders,
   suspiciousRequestDetector,
@@ -114,7 +113,7 @@ app.use(express.urlencoded({ extended: false, limit: '10mb' }));
 app.use(requestIdMiddleware);           // Add request ID for audit logging
 app.use(ipBlocklistMiddleware);         // Block banned IPs
 app.use(hppProtection);                 // Prevent HTTP Parameter Pollution
-app.use(sanitizationMiddleware);        // Sanitize all input
+// app.use(sanitizationMiddleware);     // Removed: context-unaware sanitization corrupts data
 app.use(suspiciousRequestDetector);     // Detect SQL injection, XSS, etc.
 app.use(additionalSecurityHeaders);     // Additional security headers
 app.use('/api', apiRateLimiter);        // Rate limit API routes
