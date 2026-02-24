@@ -169,7 +169,7 @@ export function additionalSecurityHeaders(_req: Request, res: Response, next: Ne
 // =============================================================================
 
 const SUSPICIOUS_PATTERNS = [
-    /(\%27)|(\')|(\-\-)|(\%23)|(#)/i,     // SQL injection
+    /(\-\-)|(\%23)|(#)/i,     // SQL injection
     /<script\b[^>]*>([\s\S]*?)<\/script>/gi, // XSS script tags
     /javascript:/gi,                         // JavaScript protocol
     /on\w+\s*=/gi,                          // Event handlers

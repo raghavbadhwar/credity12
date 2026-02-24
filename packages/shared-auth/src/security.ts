@@ -79,7 +79,7 @@ export function sanitizationMiddleware(req: Request, _res: Response, next: NextF
 // =============================================================================
 
 const SUSPICIOUS_PATTERNS = [
-    /(%27)|(')|(--)|(%23)|(#)/i,     // SQL injection
+    /(--)|(%23)|(#)/i,     // SQL injection
     /<script\b[^>]*>([\s\S]*?)<\/script>/gi, // XSS script tags
     /javascript:/gi,                         // JavaScript protocol
     /on\w+\s*=/gi,                          // Event handlers
@@ -158,7 +158,7 @@ export function setupSecurity(app: Application, config: SecurityConfig = {}) {
 
     // 5. Custom Middlewares
     app.use(suspiciousRequestDetector);
-    app.use(sanitizationMiddleware);
+    // app.use(sanitizationMiddleware); // Removed: context-unaware sanitization corrupts data (e.g. passwords)
 
     // 6. Request ID
     app.use((req: Request, res: Response, next: NextFunction) => {
