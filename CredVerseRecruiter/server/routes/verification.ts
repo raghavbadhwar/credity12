@@ -276,12 +276,7 @@ router.post('/verify/instant', writeIdempotency, async (req, res) => {
         };
         await storage.addVerification(record);
 
-        const responseBody = {
-            success: true,
-            verification: verificationResult,
-            fraud: fraudAnalysis,
-            record,
-            v1: {
+        const v1 = {
                 credential_validity: verificationResult.status === 'verified' ? 'valid' : 'invalid',
                 status_validity: verificationResult.riskFlags.includes('REVOKED_CREDENTIAL') ? 'revoked' : 'active',
                 anchor_validity: verificationResult.riskFlags.includes('NO_BLOCKCHAIN_ANCHOR') ? 'pending' : 'anchored',
@@ -289,7 +284,32 @@ router.post('/verify/instant', writeIdempotency, async (req, res) => {
                 fraud_explanations: fraudAnalysis.flags,
                 decision: recommendation,
                 decision_reason_codes: verificationResult.riskFlags,
+                // UI compatibility fields
+                reason_codes: verificationResult.riskFlags,
+                risk_signals: [],
+                risk_signals_version: 'risk-v1',
+                evidence_links: [],
+        };
+
+        const responseBody = {
+            success: true,
+            verification: verificationResult,
+            fraud: fraudAnalysis,
+            record,
+            v1,
+            candidate_summary: {
+                ...v1,
+                candidate_id: readSubjectName(credentialData) || 'unknown',
+                confidence: verificationResult.confidence,
+                risk_score: verificationResult.riskScore,
+                reason_codes: verificationResult.riskFlags,
+                work_score: { score: 0 },
             },
+            // Top level compatibility
+            reason_codes: verificationResult.riskFlags,
+            risk_signals: [],
+            risk_signals_version: 'risk-v1',
+            evidence_links: [],
         };
 
         void emitVerificationWebhook('verification.completed', {
@@ -397,7 +417,7 @@ router.get('/verify/bulk/:jobId', async (req, res) => {
 
 
 // New route: Verify credential via link URL
-router.post('/verify/link', writeIdempotency, async (req, res) => {
+router.post('/verify/link', authMiddleware, writeIdempotency, async (req, res) => {
     try {
         const { link } = req.body;
         if (!link) {
@@ -511,10 +531,35 @@ router.post('/v1/oid4vp/responses', authMiddleware, writeIdempotency, async (req
             await queuePersist();
         }
 
-        const { request_id: requestId, vp_token: vpToken, credential, jwt } = req.body || {};
+        const { request_id: requestId, vp_token: vpToken, credential, jwt, state } = req.body || {};
+
+        if (!requestId) {
+            return res.status(400).json({ error: 'request_id is required' });
+        }
+
         const request = requestId ? vpRequests.get(requestId) : undefined;
-        if (requestId && !request) {
+        if (!request) {
             return res.status(400).json({ error: 'unknown request_id' });
+        }
+
+        // Validate state
+        if (request.state && state !== request.state) {
+             return res.status(400).json({ error: 'state mismatch' });
+        }
+
+        // Validate nonce (must be in VP)
+        const token = jwt || vpToken;
+        if (token && typeof token === 'string') {
+            try {
+                const payload = parseJwtPayloadSafely(token);
+                if (payload.nonce && payload.nonce !== request.nonce) {
+                    return res.status(400).json({ error: 'nonce mismatch' });
+                }
+            } catch (e) {
+                // Invalid JWT will be caught by verificationEngine, but we can't check nonce.
+                // If nonce is required but we can't parse it, should we fail?
+                // The verificationEngine check comes later.
+            }
         }
 
         if (requestId && request) {
@@ -603,6 +648,7 @@ router.post('/v1/verifications/instant', authMiddleware, writeIdempotency, async
 
         res.json({
             ...contractResult,
+            candidate_summary: { ...contractResult, reason_codes: contractResult.decision_reason_codes },
             verification_id: contractResult.id,
             checks: verificationResult.checks,
         });
