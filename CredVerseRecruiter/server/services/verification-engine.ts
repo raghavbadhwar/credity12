@@ -528,6 +528,13 @@ export class VerificationEngine {
                     message: isRevoked ? 'Credential has been REVOKED by Issuer' : 'Credential is valid (Active)',
                     details: { revoked: isRevoked, checkedAt: new Date().toISOString() },
                 };
+            } else if (res.status === 404) {
+                return {
+                    name: 'Revocation Check',
+                    status: 'failed',
+                    message: 'Credential not found in Issuer Registry (Invalid or Revoked)',
+                    details: { code: 'ISSUER_CREDENTIAL_NOT_FOUND', checkedAt: new Date().toISOString() },
+                };
             }
         } catch (e) {
             console.error("Revocation check failed", e);

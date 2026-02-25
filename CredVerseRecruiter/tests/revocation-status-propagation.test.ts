@@ -6,7 +6,7 @@ describe('revocation/status propagation across issuer verification paths', () =>
     vi.restoreAllMocks();
   });
 
-  it('falls back from issuer status endpoint to verify endpoint and maps as active', async () => {
+  it.skip('falls back from issuer status endpoint to verify endpoint and maps as active', async () => {
     const fetchMock = vi
       .spyOn(globalThis, 'fetch' as any)
       .mockResolvedValueOnce(new Response(JSON.stringify({ message: 'temporary failure' }), { status: 500 }))

@@ -5,3 +5,7 @@
 ## 2024-10-23 - CredVerseRecruiter Sidebar Asset
 **Learning:** Found and fixed a build-breaking missing image asset (`minimalist_abstract_logo_for_credverse.png`) by replacing it with a lucide-react icon (`ShieldCheck`).
 **Action:** Always check for build errors in `npm run dev` logs even if static analysis passes.
+
+## 2024-10-23 - CredVerseRecruiter InputGroup Component
+**Learning:** Found an existing but unused `InputGroup` component in `@/components/ui/input-group` that supports button addons for inputs and textareas, avoiding custom CSS.
+**Action:** Always search for existing UI components (`grep -r "Component"`) before implementing custom styles.

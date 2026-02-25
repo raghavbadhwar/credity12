@@ -7,6 +7,7 @@ import complianceRoutes from "./routes/compliance";
 import claimsProxyRoutes from "./routes/claims-proxy";
 import workScoreRoutes from "./routes/workscore";
 import safeDateRoutes from "./routes/safedate";
+import proofsRoutes from "./routes/proofs";
 import { blockchainService } from "./services/blockchain-service";
 
 export async function registerRoutes(
@@ -25,6 +26,7 @@ export async function registerRoutes(
 
   // Verification routes
   app.use("/api", verificationRoutes);
+  app.use("/api", proofsRoutes);
   app.use("/api", analyticsRoutes);
   app.use("/api", authRoutes);
   app.use("/api", complianceRoutes);
