@@ -103,10 +103,32 @@ describe('issuer -> wallet -> verifier cross-service e2e', () => {
              return { ok: true, status: 200, json: async () => ({ revoked: false }) } as Response;
         }
 
-        // Check if it's a request to our test servers (5001, etc)
-        // If so, we can't easily "pass through" if we overwrote global.fetch.
-        // But `vitest` `vi.fn` doesn't have "original".
-        // I need to save original first.
+        // Simulate auth failure for test servers if headers are missing
+        if (urlStr.includes('127.0.0.1')) {
+             const headers = options?.headers as Record<string, string> || {};
+             const hasAuth = headers['Authorization'] || headers['x-api-key'];
+             if (!hasAuth) {
+                 return { ok: false, status: 401, json: async () => ({}) } as Response;
+             }
+
+             // Simulate issuance success (201)
+             if (urlStr.includes('/credentials/issue')) {
+                 return {
+                     ok: true,
+                     status: 201,
+                     json: async () => ({ id: 'mock-credential-id' })
+                 } as Response;
+             }
+
+             // Simulate offer creation
+             if (urlStr.includes('/offer')) {
+                 return {
+                     ok: true,
+                     status: 200,
+                     json: async () => ({ offerUrl: 'http://127.0.0.1:5001/api/v1/public/issuance/offer/consume?token=mock' })
+                 } as Response;
+             }
+        }
 
         return { ok: true, status: 200, json: async () => ({}) } as Response;
     });

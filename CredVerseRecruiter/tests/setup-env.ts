@@ -26,8 +26,8 @@ beforeAll(() => {
             json: async () => ({
                 did: 'did:key:mocked',
                 name: 'Mocked University',
-                trustStatus: 'trusted',
-                verified: true
+                trustStatus: urlStr.includes('policy-review') ? 'unverified' : 'trusted',
+                verified: !urlStr.includes('policy-review')
             })
         } as Response;
     }

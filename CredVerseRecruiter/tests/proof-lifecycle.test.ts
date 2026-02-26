@@ -116,7 +116,7 @@ describe('proof lifecycle routes', () => {
   });
 
   it('accepts legacy top-level hash in verification for backward compatibility', async () => {
-    const proof = { issuer: { id: 'did:key:issuer' }, credentialSubject: { b: 2, a: 1 } };
+    const proof = { issuer: { id: 'did:key:issuer' }, credentialSubject: { b: 2, a: 1 }, proof: { type: 'test' } };
     const expectedHash = deterministicHashLegacyTopLevel(proof, 'sha256');
 
     const res = await request(app)
