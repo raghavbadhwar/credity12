@@ -11,11 +11,6 @@ import { generateAccessToken as generateIssuerAccessToken } from '@credverse/sha
 import { generateAccessToken as generateVerifierAccessToken } from '../server/services/auth-service';
 import { generateAccessToken as generateWalletAccessToken } from '../../BlockWalletDigi/server/services/auth-service';
 
-// Set env vars early for hoisted imports
-const issuerApiKey = 'test-api-key';
-process.env.ISSUER_BOOTSTRAP_API_KEY = issuerApiKey;
-process.env.NODE_ENV = 'test';
-
 type ChainMode = 'active' | 'deferred' | 'writes-disabled';
 
 describe('issuer -> wallet -> verifier cross-service e2e', () => {
@@ -24,6 +19,7 @@ describe('issuer -> wallet -> verifier cross-service e2e', () => {
   let verifierApp: express.Express;
   let issuerServer: Server;
 
+  const issuerApiKey = process.env.ISSUER_BOOTSTRAP_API_KEY || 'test-api-key';
   const verifierToken = generateVerifierAccessToken({ id: '1', username: 'verifier', role: 'recruiter' });
   const verifierWrongRoleToken = generateVerifierAccessToken({ id: '2', username: 'issuer-user', role: 'issuer' });
   const walletToken = generateWalletAccessToken({ id: 1, username: 'holder', role: 'holder' });
