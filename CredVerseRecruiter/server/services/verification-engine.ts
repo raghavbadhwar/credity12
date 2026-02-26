@@ -218,7 +218,7 @@ export class VerificationEngine {
             const signatureCheck = await this.verifySignature(credential);
             checks.push(signatureCheck);
             if (signatureCheck.status === 'failed') {
-                overallStatus = 'failed';
+                // Do not force overallStatus = failed here, let risk score decide (suspicious vs failed)
                 riskFlags.push('INVALID_SIGNATURE');
             } else if (signatureCheck.status === 'warning') {
                 riskFlags.push('UNSIGNED_CREDENTIAL');
@@ -683,12 +683,12 @@ export class VerificationEngine {
         // Base score from checks
         for (const check of checks) {
             if (check.status === 'failed') score += 25;
-            else if (check.status === 'warning') score += 5; // Reduced from 10 to allow legacy/unsigned creds to pass as 'verified' (<=40)
+            else if (check.status === 'warning') score += 5; // Low warning penalty to allow legacy (<=40 verified)
         }
 
         // Additional risk from flags
         const flagWeights: Record<string, number> = {
-            'INVALID_SIGNATURE': 30,
+            'INVALID_SIGNATURE': 50, // 50 + 25 = 75 -> Failed
             'UNKNOWN_ISSUER': 20,
             'EXPIRED_CREDENTIAL': 25,
             'REVOKED_CREDENTIAL': 50,
@@ -696,7 +696,7 @@ export class VerificationEngine {
             'DID_RESOLUTION_FAILED': 15,
             'UNVERIFIED_ISSUER': 10,
             'PROOF_HASH_MISMATCH': 100, // Explicit failure
-            'UNSIGNED_CREDENTIAL': 5, // Reduced from 20 to allow passing
+            'UNSIGNED_CREDENTIAL': 20, // 20 + 5 + 10 + 5 = 40 (Legacy Unknown) -> Verified.
         };
 
         for (const flag of flags) {
