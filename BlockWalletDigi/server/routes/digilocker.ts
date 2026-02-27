@@ -270,29 +270,23 @@ router.post("/digilocker/connect", authMiddleware, async (req, res) => {
 
             // Import demo documents
             const documents = await digilockerService.listDocuments(userId);
-            const documentsToImport = documents.slice(0, 3);
 
-            // Parallel pull documents from DigiLocker
-            const pulledDocs = await Promise.all(
-                documentsToImport.map(async (doc) => {
-                    const { document } = await digilockerService.pullDocument(userId, doc.uri);
-                    return { doc, document };
-                })
-            );
+            for (const doc of documents.slice(0, 3)) { // Import first 3
+                const { document } = await digilockerService.pullDocument(userId, doc.uri);
 
-            // Batch store credentials in the wallet
-            await walletService.storeCredentials(userId, pulledDocs.map(({ doc, document }) => ({
-                type: ['VerifiableCredential', doc.doctype, 'DigiLockerDocument'],
-                issuer: doc.issuer,
-                issuanceDate: new Date(doc.date),
-                data: {
-                    name: doc.name,
-                    source: 'DigiLocker',
-                    uri: doc.uri,
-                    ...document,
-                },
-                category: doc.doctype.includes('CLASS') ? 'academic' : 'government',
-            })));
+                await walletService.storeCredential(userId, {
+                    type: ['VerifiableCredential', doc.doctype, 'DigiLockerDocument'],
+                    issuer: doc.issuer,
+                    issuanceDate: new Date(doc.date),
+                    data: {
+                        name: doc.name,
+                        source: 'DigiLocker',
+                        uri: doc.uri,
+                        ...document,
+                    },
+                    category: doc.doctype.includes('CLASS') ? 'academic' : 'government',
+                });
+            }
 
             await storage.createActivity({
                 userId,
