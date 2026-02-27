@@ -9,3 +9,7 @@
 ## 2024-10-23 - CredVerseRecruiter InputGroup Component
 **Learning:** Found an existing but unused `InputGroup` component in `@/components/ui/input-group` that supports button addons for inputs and textareas, avoiding custom CSS.
 **Action:** Always search for existing UI components (`grep -r "Component"`) before implementing custom styles.
+
+## 2024-10-25 - Tooltip Accessibility in BlockWalletDigi
+**Learning:** Found that `shadcn/ui` Tooltip implementation requires both `TooltipTrigger` and `TooltipContent` to function correctly and remain accessible.
+**Action:** When adding tooltips to icon-only buttons, always wrap them in `TooltipTrigger` and provide descriptive `TooltipContent` for screen readers and hover states.
