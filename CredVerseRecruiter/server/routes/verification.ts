@@ -6,11 +6,21 @@ import { storage, VerificationRecord } from '../storage';
 import crypto from 'crypto';
 import { idempotencyMiddleware, PostgresStateStore, signWebhook } from '@credverse/shared-auth';
 import type { VerificationResultContract } from '@credverse/shared-auth';
+import {
+    SafeFetchError,
+    getExternalVerificationTimeoutMs,
+    readEnvFlag,
+    readEnvNumber,
+    readJsonResponseWithGuards,
+    safeFetch,
+} from '../services/safe-fetch';
 
 const router = Router();
 const writeIdempotency = idempotencyMiddleware({ ttlMs: 6 * 60 * 60 * 1000 });
 const vpRequests = new Map<string, { id: string; nonce: string; createdAt: number; purpose: string; state?: string }>();
 const MAX_JWT_BYTES = 16 * 1024;
+const MAX_LINK_RESPONSE_BYTES = () => readEnvNumber('VERIFICATION_LINK_MAX_RESPONSE_BYTES', 512 * 1024);
+const LINK_FETCH_TIMEOUT_MS = () => readEnvNumber('VERIFICATION_LINK_FETCH_TIMEOUT_MS', getExternalVerificationTimeoutMs());
 const VP_REQUEST_TTL_MS = Number(process.env.OID4VP_REQUEST_TTL_MS || 15 * 60 * 1000);
 const LEGACY_VERIFY_SUNSET_HEADER =
     process.env.API_LEGACY_SUNSET ?? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toUTCString();
@@ -79,14 +89,24 @@ function pruneExpiredVpRequests(): boolean {
 
 function mapCredentialValidity(
     status: 'verified' | 'failed' | 'suspicious' | 'pending',
+    riskFlags: string[] = [],
 ): VerificationResultContract['credential_validity'] {
+    const hardInvalidFlags = new Set([
+        'INVALID_SIGNATURE',
+        'REVOKED_CREDENTIAL',
+        'EXPIRED_CREDENTIAL',
+        'PARSE_FAILED',
+        'MALFORMED_CREDENTIAL',
+    ]);
     if (status === 'verified') return 'valid';
+    if (riskFlags.some((flag) => hardInvalidFlags.has(flag))) return 'invalid';
     if (status === 'failed') return 'invalid';
     return 'unknown';
 }
 
 function mapStatusValidity(riskFlags: string[]): VerificationResultContract['status_validity'] {
     if (riskFlags.includes('REVOKED_CREDENTIAL')) return 'revoked';
+    if (riskFlags.includes('REVOCATION_STATUS_UNAVAILABLE')) return 'unknown';
     return 'active';
 }
 
@@ -154,8 +174,10 @@ async function emitVerificationWebhook(event: string, payload: Record<string, un
     const body = { event, ...payload };
     const signed = secret ? signWebhook(body, secret) : null;
 
-    await fetch(targetUrl, {
+    const response = await safeFetch(targetUrl, {
         method: 'POST',
+        timeoutMs: getExternalVerificationTimeoutMs(),
+        allowPrivateNetwork: true,
         headers: {
             'Content-Type': 'application/json',
             ...(signed
@@ -167,6 +189,9 @@ async function emitVerificationWebhook(event: string, payload: Record<string, un
         },
         body: signed ? signed.payload : JSON.stringify(body),
     });
+    if (!response.ok) {
+        throw new Error(`Verification webhook delivery failed (status ${response.status})`);
+    }
 }
 
 function parseJwtPayloadSafely(jwt: string): Record<string, unknown> {
@@ -423,16 +448,24 @@ router.post('/verify/link', authMiddleware, writeIdempotency, async (req, res) =
         if (!link) {
             return res.status(400).json({ error: 'Link URL is required' });
         }
-        // Fetch credential from the provided URL (expects JSON)
-        const response = await fetch(link);
+        if (typeof link !== 'string') {
+            return res.status(400).json({ error: 'Link URL must be a string', code: 'VERIFICATION_LINK_URL_INVALID' });
+        }
+
+        const response = await safeFetch(link, {
+            timeoutMs: LINK_FETCH_TIMEOUT_MS(),
+            allowPrivateNetwork: readEnvFlag('VERIFICATION_ALLOW_PRIVATE_LINK_FETCH'),
+        });
         if (!response.ok) {
-            return res.status(400).json({ error: `Failed to fetch credential from link (status ${response.status})` });
+            return res.status(502).json({
+                error: `Failed to fetch credential from link (status ${response.status})`,
+                code: 'VERIFICATION_LINK_UPSTREAM_ERROR',
+            });
         }
-        const payloadUnknown: unknown = await response.json();
-        if (!payloadUnknown || typeof payloadUnknown !== 'object') {
-            return res.status(400).json({ error: 'Invalid credential response payload' });
-        }
-        const payload = payloadUnknown as Record<string, unknown>;
+        const payload = await readJsonResponseWithGuards(response, {
+            maxBytes: MAX_LINK_RESPONSE_BYTES(),
+            allowedContentTypes: ['application/json', '+json'],
+        });
 
         let verificationResult;
         let credentialData: Record<string, unknown> = {};
@@ -479,6 +512,9 @@ router.post('/verify/link', authMiddleware, writeIdempotency, async (req, res) =
         await storage.addVerification(record);
         res.json({ success: true, verification: verificationResult, fraud: fraudAnalysis, record });
     } catch (error) {
+        if (error instanceof SafeFetchError) {
+            return res.status(error.statusCode).json({ error: error.message, code: error.code });
+        }
         console.error('Link verification error:', error);
         res.status(500).json({ error: 'Link verification failed' });
     }
@@ -637,7 +673,7 @@ router.post('/v1/verifications/instant', authMiddleware, writeIdempotency, async
 
         const contractResult: VerificationResultContract = {
             id: verificationResult.verificationId,
-            credential_validity: mapCredentialValidity(verificationResult.status),
+            credential_validity: mapCredentialValidity(verificationResult.status, verificationResult.riskFlags),
             status_validity: mapStatusValidity(verificationResult.riskFlags),
             anchor_validity: mapAnchorValidity(verificationResult.riskFlags),
             fraud_score: fraudAnalysis.score,

@@ -22,6 +22,7 @@ describe('issuer -> wallet -> verifier cross-service e2e', () => {
   let walletApp: express.Express;
   let verifierApp: express.Express;
   let issuerServer: Server;
+  let currentChainMode: ChainMode = 'active';
 
   const issuerApiKey = process.env.ISSUER_BOOTSTRAP_API_KEY || 'test-api-key';
   const verifierToken = generateVerifierAccessToken({ id: '1', username: 'verifier', role: 'recruiter' });
@@ -102,14 +103,50 @@ describe('issuer -> wallet -> verifier cross-service e2e', () => {
         if (urlStr.includes('/verify/') || urlStr.includes('/status')) {
              return { ok: true, status: 200, json: async () => ({ revoked: false }) } as Response;
         }
+        if (urlStr.includes('/public/issuance/offer/consume')) {
+             const proofByMode: Record<ChainMode, { deferred: boolean; code: string }> = {
+               active: { deferred: false, code: 'BLOCKCHAIN_ACTIVE' },
+               deferred: { deferred: true, code: 'BLOCKCHAIN_DEFERRED_MODE' },
+               'writes-disabled': { deferred: true, code: 'BLOCKCHAIN_WRITES_DISABLED' },
+             };
+             return {
+                 ok: true,
+                 status: 200,
+                 json: async () => ({
+                   credential: {
+                      id: 'mock-credential-id',
+                      createdAt: new Date().toISOString(),
+                      issuer: 'did:key:issuer',
+                      issuanceDate: new Date().toISOString(),
+                      credentialSubject: {
+                        id: 'did:key:e2e-holder',
+                        name: 'E2E Candidate',
+                      },
+                      proof: {
+                        type: 'Ed25519Signature2020',
+                        proofValue: 'zMockProofValue',
+                      },
+                      credentialData: {
+                        credentialName: 'Bachelor of Technology',
+                      },
+                    },
+                    vcJwt: 'eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJkaWQ6a2V5Omlzc3VlciIsInZjIjp7Imlzc3VlciI6ImRpZDprZXk6aXNzdWVyIiwiY3JlZGVudGlhbFN1YmplY3QiOnsibmFtZSI6IkUyRSBDYW5kaWRhdGUifSwidHlwZSI6WyJWZXJpZmlhYmxlQ3JlZGVudGlhbCJdfX0.signature',
+                   proof: proofByMode[currentChainMode],
+                 }),
+             } as Response;
+        }
 
         // Simulate auth failure for test servers if headers are missing
         if (urlStr.includes('127.0.0.1')) {
-             const headers = options?.headers as Record<string, string> || {};
-             const hasAuth = headers['Authorization'] || headers['x-api-key'];
-             if (!hasAuth) {
-                 return { ok: false, status: 401, json: async () => ({}) } as Response;
-             }
+              const headers = options?.headers as Record<string, string> || {};
+              const hasAuth = headers['Authorization'] || headers['x-api-key'];
+              const apiKey = headers['x-api-key'];
+              if (apiKey && apiKey === 'invalid-key') {
+                  return { ok: false, status: 401, json: async () => ({ message: 'Invalid API Key' }) } as Response;
+              }
+              if (!hasAuth) {
+                  return { ok: false, status: 401, json: async () => ({}) } as Response;
+              }
 
              // Simulate issuance success (201)
              if (urlStr.includes('/credentials/issue')) {
@@ -161,6 +198,7 @@ describe('issuer -> wallet -> verifier cross-service e2e', () => {
   });
 
   function mockChainMode(mode: ChainMode): void {
+    currentChainMode = mode;
     const stateByMode = {
       active: { configured: true, writesAllowed: true, writePolicyReason: undefined, chainNetwork: 'polygon-amoy', chainId: 80002, networkName: 'polygon-amoy' },
       deferred: { configured: false, writesAllowed: true, writePolicyReason: undefined, chainNetwork: 'polygon-amoy', chainId: 80002, networkName: 'polygon-amoy' },

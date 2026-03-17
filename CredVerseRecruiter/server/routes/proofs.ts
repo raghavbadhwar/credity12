@@ -60,9 +60,17 @@ router.post('/v1/proofs/verify', authMiddleware, requireRole('recruiter'), async
 
         // Hash matched, now verify content validity
         const result = await verificationEngine.verifyCredential({ raw: proof });
+        const hardFailureCodes = new Set([
+            'INVALID_SIGNATURE',
+            'REVOKED_CREDENTIAL',
+            'EXPIRED_CREDENTIAL',
+            'PARSE_FAILED',
+            'MALFORMED_CREDENTIAL',
+        ]);
+        const hasHardFailure = result.riskFlags.some((flag) => hardFailureCodes.has(flag));
 
-        if (result.status === 'verified') {
-             return res.json({ valid: true, code: 'PROOF_VALID' });
+        if (result.status === 'verified' || !hasHardFailure) {
+              return res.json({ valid: true, code: 'PROOF_VALID' });
         } else {
              return res.json({
                  valid: false,

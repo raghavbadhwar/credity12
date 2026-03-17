@@ -20,10 +20,10 @@ npm run gate:foundation:local
 
 This executes `scripts/foundation-e2e-gate.mjs` and verifies:
 - OID4VCI offer/token/credential issuance
-- wallet claim/store path
+- wallet offer-claim path (`/api/v1/wallet/offer/claim`)
 - OID4VP request/response path
 - instant verification path
-- revoke + post-revoke status
+- revoke + strict post-revoke verification semantics (`revoked`/`invalid`)
 
 ## Required Services
 - Issuer (`http://localhost:5001` by default)

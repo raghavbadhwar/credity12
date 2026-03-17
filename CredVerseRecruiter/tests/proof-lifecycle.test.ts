@@ -80,6 +80,9 @@ describe('proof lifecycle routes', () => {
 
   afterEach(() => {
     fetchMock.mockClear();
+    delete process.env.VERIFICATION_ALLOW_PRIVATE_LINK_FETCH;
+    delete process.env.VERIFICATION_LINK_FETCH_TIMEOUT_MS;
+    delete process.env.VERIFICATION_LINK_MAX_RESPONSE_BYTES;
   });
 
   it('returns explicit unauthorized code for link verification without auth', async () => {
@@ -89,6 +92,93 @@ describe('proof lifecycle routes', () => {
 
     expect(res.status).toBe(401);
     expect(String(res.body.error || res.body.message || '')).toMatch(/auth|token/i);
+  });
+
+  it('rejects private-network link targets by default', async () => {
+    const res = await request(app)
+      .post('/api/verify/link')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ link: 'http://127.0.0.1:8080/credential.json' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.code).toMatch(/VERIFICATION_LINK_(PRIVATE|HOST)_/);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('allows explicit private-network override for trusted local testing', async () => {
+    process.env.VERIFICATION_ALLOW_PRIVATE_LINK_FETCH = 'true';
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      headers: new Headers({ 'content-type': 'application/json' }),
+      text: async () =>
+        JSON.stringify({
+          credential: {
+            issuer: { id: 'did:key:issuer' },
+            credentialSubject: { name: 'Alice' },
+            type: ['VerifiableCredential'],
+            proof: { type: 'Ed25519Signature2018', verificationMethod: 'did:key:issuer#key' },
+          },
+        }),
+    } as Response);
+
+    const res = await request(app)
+      .post('/api/verify/link')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ link: 'http://127.0.0.1:8080/credential.json' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+  });
+
+  it('fails closed for non-http protocols', async () => {
+    const res = await request(app)
+      .post('/api/verify/link')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ link: 'file:///etc/passwd' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe('VERIFICATION_LINK_PROTOCOL_BLOCKED');
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('returns explicit timeout error for stalled link fetches', async () => {
+    process.env.VERIFICATION_LINK_FETCH_TIMEOUT_MS = '25';
+    fetchMock.mockImplementationOnce(async (_url, init) => {
+      const signal = init?.signal as AbortSignal | undefined;
+      return await new Promise<Response>((_resolve, reject) => {
+        signal?.addEventListener('abort', () => {
+          const abortError = new Error('aborted');
+          (abortError as Error & { name: string }).name = 'AbortError';
+          reject(abortError);
+        });
+      });
+    });
+
+    const res = await request(app)
+      .post('/api/verify/link')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ link: 'https://credentials.example.com/credential.json' });
+
+    expect(res.status).toBe(504);
+    expect(res.body.code).toBe('VERIFICATION_FETCH_TIMEOUT');
+  });
+
+  it('rejects unsupported content types for link verification responses', async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      headers: new Headers({ 'content-type': 'text/html; charset=utf-8' }),
+      text: async () => '<html>not json</html>',
+    } as Response);
+
+    const res = await request(app)
+      .post('/api/verify/link')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ link: 'https://credentials.example.com/credential.json' });
+
+    expect(res.status).toBe(415);
+    expect(res.body.code).toBe('VERIFICATION_LINK_CONTENT_TYPE_BLOCKED');
   });
 
   it('returns explicit unauthorized code for metadata endpoint without auth', async () => {

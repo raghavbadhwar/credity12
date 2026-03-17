@@ -5,6 +5,9 @@ const config = {
   issuerBase: (process.env.ISSUER_BASE_URL || 'http://localhost:5001').replace(/\/$/, ''),
   walletBase: (process.env.WALLET_BASE_URL || 'http://localhost:5002').replace(/\/$/, ''),
   recruiterBase: (process.env.RECRUITER_BASE_URL || 'http://localhost:5003').replace(/\/$/, ''),
+  issuerAuthBasePath: process.env.ISSUER_AUTH_BASE_PATH || '/api/v1/auth',
+  walletAuthBasePath: process.env.WALLET_AUTH_BASE_PATH || '/api/v1/auth',
+  recruiterAuthBasePath: process.env.RECRUITER_AUTH_BASE_PATH || '/api/auth',
   issuerApiKey:
     process.env.E2E_ISSUER_API_KEY
     || process.env.ISSUER_BOOTSTRAP_API_KEY
@@ -60,17 +63,17 @@ function assertCondition(condition, message) {
   }
 }
 
-async function resolveServiceAccessToken(baseUrl, runId, label) {
+async function resolveServiceAccessToken(baseUrl, runId, label, authBasePath) {
   const username = `${label}_${runId}`;
   const password = `Gate#${runId}Aa1!`;
 
-  await requestJson(baseUrl, '/api/auth/register', {
+  await requestJson(baseUrl, `${authBasePath}/register`, {
     method: 'POST',
     body: { username, password },
     expectedStatuses: [201, 409],
   });
 
-  const login = await requestJson(baseUrl, '/api/auth/login', {
+  const login = await requestJson(baseUrl, `${authBasePath}/login`, {
     method: 'POST',
     body: { username, password },
   });
@@ -85,11 +88,21 @@ async function resolveRecruiterAccessToken(runId) {
     return config.recruiterAccessToken;
   }
 
-  return resolveServiceAccessToken(config.recruiterBase, runId, 'recruiter_foundation');
+  return resolveServiceAccessToken(
+    config.recruiterBase,
+    runId,
+    'recruiter_foundation',
+    config.recruiterAuthBasePath,
+  );
 }
 
 async function resolveWalletAccessToken(runId) {
-  return resolveServiceAccessToken(config.walletBase, runId, 'wallet_foundation');
+  return resolveServiceAccessToken(
+    config.walletBase,
+    runId,
+    'wallet_foundation',
+    config.walletAuthBasePath,
+  );
 }
 
 async function run() {
@@ -159,32 +172,43 @@ async function run() {
   });
 
   const credentialId = issued?.credential_id;
-  const credentialJwt = issued?.credential;
+  const issuedCredentialJwt = issued?.credential;
   const statusListId = issued?.status?.status_list_id;
 
   assertCondition(!!credentialId, 'Credential endpoint did not return credential_id');
-  assertCondition(!!credentialJwt, 'Credential endpoint did not return credential payload');
+  assertCondition(!!issuedCredentialJwt, 'Credential endpoint did not return credential payload');
 
-  await requestJson(config.walletBase, '/api/wallet/credentials', {
+  const credentialOffer = await requestJson(
+    config.issuerBase,
+    `/api/v1/credentials/${encodeURIComponent(credentialId)}/offer`,
+    {
+      method: 'POST',
+      headers: {
+        'X-API-Key': config.issuerApiKey,
+        'Idempotency-Key': idempotencyKey('claim-offer'),
+      },
+      body: {},
+    },
+  );
+
+  const offerUrl = credentialOffer?.offerUrl;
+  assertCondition(typeof offerUrl === 'string' && offerUrl.length > 0, 'Issuer offer endpoint did not return offerUrl');
+
+  const claim = await requestJson(config.walletBase, '/api/v1/wallet/offer/claim', {
     method: 'POST',
     headers: {
       ...walletAuthHeaders,
+      'Idempotency-Key': idempotencyKey('claim'),
     },
     body: {
       userId: config.walletUserId,
-      credential: {
-        type: ['VerifiableCredential', 'FoundationGateCredential'],
-        issuer: 'CredVerse Issuer',
-        issuanceDate: new Date().toISOString(),
-        jwt: credentialJwt,
-        data: {
-          credentialId,
-          format: issued?.format || 'sd-jwt-vc',
-          runId,
-        },
-      },
+      url: offerUrl,
     },
   });
+  assertCondition(claim?.code === 'OFFER_CLAIMED', 'Wallet offer claim did not return OFFER_CLAIMED');
+
+  const credentialJwt = claim?.credential?.jwt || issuedCredentialJwt;
+  assertCondition(typeof credentialJwt === 'string' && credentialJwt.length > 0, 'Claimed credential did not include jwt');
 
   const vpRequest = await requestJson(config.recruiterBase, '/api/v1/oid4vp/requests', {
     method: 'POST',
@@ -221,8 +245,8 @@ async function run() {
   });
 
   assertCondition(
-    verifyBeforeRevoke?.credential_validity === 'valid' || verifyBeforeRevoke?.verification_id,
-    'Instant verification did not return a valid verification payload',
+    verifyBeforeRevoke?.credential_validity === 'valid' && verifyBeforeRevoke?.status_validity !== 'revoked',
+    `Pre-revoke verification is not valid: ${JSON.stringify(verifyBeforeRevoke)}`,
   );
 
   const revoke = await requestJson(config.issuerBase, `/api/v1/credentials/${encodeURIComponent(credentialId)}/revoke`, {
@@ -246,7 +270,7 @@ async function run() {
     assertCondition(typeof statusList?.bitstring === 'string', 'Status list response missing bitstring');
   }
 
-  await requestJson(config.recruiterBase, '/api/v1/verifications/instant', {
+  const verifyAfterRevoke = await requestJson(config.recruiterBase, '/api/v1/verifications/instant', {
     method: 'POST',
     headers: { ...recruiterAuthHeaders, 'Idempotency-Key': idempotencyKey('verify-after-revoke') },
     body: {
@@ -254,6 +278,25 @@ async function run() {
       verifiedBy: 'foundation-e2e-gate',
     },
   });
+
+  const reasonCodes = Array.isArray(verifyAfterRevoke?.decision_reason_codes)
+    ? verifyAfterRevoke.decision_reason_codes
+    : [];
+  const hasRevokedOrInvalidSemantics = verifyAfterRevoke?.status_validity === 'revoked'
+    || verifyAfterRevoke?.credential_validity === 'invalid'
+    || reasonCodes.includes('REVOKED_CREDENTIAL');
+
+  assertCondition(
+    hasRevokedOrInvalidSemantics,
+    `Post-revoke verification remained pass-open: ${JSON.stringify(verifyAfterRevoke)}`,
+  );
+  assertCondition(
+    verifyAfterRevoke?.decision !== 'approve',
+    `Post-revoke verification unexpectedly approved revoked credential: ${JSON.stringify(verifyAfterRevoke)}`,
+  );
+  console.log(
+    `[Gate] Post-revoke semantics credential_validity=${verifyAfterRevoke?.credential_validity || 'n/a'} status_validity=${verifyAfterRevoke?.status_validity || 'n/a'}`,
+  );
 
   console.log('[Gate] PASS');
   console.log(`[Gate] Credential ID: ${credentialId}`);
