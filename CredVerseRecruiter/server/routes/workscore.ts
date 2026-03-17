@@ -2,6 +2,7 @@ import { randomUUID } from 'crypto';
 import { Router } from 'express';
 import { z } from 'zod';
 import { WORKSCORE_REASON_CODES, WORKSCORE_WEIGHTS } from '@credverse/shared-auth';
+import { CredVerse } from '@credverse/trust';
 import { evaluateWorkScore } from '../services/workscore';
 import { deterministicHash } from '../services/proof-lifecycle';
 import { storage } from '../storage';
@@ -38,6 +39,22 @@ const workScorePayloadSchema = z
   })
   .strict();
 
+function isTrue(value: string | undefined): boolean {
+  return typeof value === 'string' && ['1', 'true', 'yes', 'on'].includes(value.trim().toLowerCase());
+}
+
+function createTrustSdkClient(): CredVerse | null {
+  if (!isTrue(process.env.WORKSCORE_TRUST_SDK_ENABLED)) return null;
+  const baseUrl = process.env.TRUST_SDK_BASE_URL;
+  if (!baseUrl) return null;
+  const timeoutMs = Number(process.env.TRUST_SDK_TIMEOUT_MS || 10_000);
+  return new CredVerse({
+    baseUrl,
+    apiKey: process.env.TRUST_SDK_API_KEY,
+    timeoutMs: Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : 10_000,
+  });
+}
+
 router.post('/workscore/evaluate', async (req, res) => {
   const parsed = workScorePayloadSchema.safeParse(req.body);
 
@@ -52,11 +69,46 @@ router.post('/workscore/evaluate', async (req, res) => {
     });
   }
 
-  const evaluation = evaluateWorkScore({
+  const localEvaluation = evaluateWorkScore({
     components: parsed.data.components,
     reason_codes: parsed.data.reason_codes,
     evidence: parsed.data.evidence,
   });
+  let evaluation = localEvaluation;
+  let trustSdkContext: Record<string, unknown> | undefined;
+
+  const trustSdkClient = createTrustSdkClient();
+  const trustSubjectDid = typeof parsed.data.context?.subjectDid === 'string' ? parsed.data.context.subjectDid : undefined;
+  const trustUserId =
+    typeof parsed.data.context?.userId === 'number' && Number.isInteger(parsed.data.context.userId)
+      ? parsed.data.context.userId
+      : undefined;
+  if (trustSdkClient && (trustSubjectDid || trustUserId)) {
+    try {
+      const trustVerify = await trustSdkClient.verify({
+        subjectDid: trustSubjectDid,
+        userId: trustUserId,
+        vertical: 'HIRING',
+        requiredScore: 70,
+        includeZkProof: true,
+      });
+      const sdkScore = Math.max(0, Math.min(1000, Math.round((trustVerify.score || 0) * 10)));
+      evaluation = {
+        ...localEvaluation,
+        score: sdkScore,
+        decision: sdkScore >= 850 ? 'HIRE_FAST' : sdkScore >= 700 ? 'REVIEW' : 'INVESTIGATE_REJECT',
+      };
+      trustSdkContext = {
+        recommendation: trustVerify.recommendation,
+        confidence: trustVerify.confidence,
+        zk_proof_status: trustVerify.zkProof?.status || null,
+      };
+    } catch (error) {
+      trustSdkContext = {
+        error: (error as Error)?.message || 'TRUST_SDK_REQUEST_FAILED',
+      };
+    }
+  }
 
   const candidate_hash = parsed.data.candidate_id
     ? deterministicHash({ candidate_id: parsed.data.candidate_id }, 'sha256')
@@ -91,6 +143,7 @@ router.post('/workscore/evaluate', async (req, res) => {
     reason_codes: evaluation.reason_codes,
     evidence: evaluation.evidence,
     weights: WORKSCORE_WEIGHTS,
+    trust_sdk: trustSdkContext,
   });
 });
 

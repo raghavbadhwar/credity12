@@ -6,7 +6,14 @@ const circuits = ['score_threshold', 'age_verification', 'cross_vertical_aggrega
 const root = process.cwd();
 
 function run(cmd) {
-  execSync(cmd, { stdio: 'inherit' });
+  const localBin = path.join(root, 'node_modules', '.bin');
+  execSync(cmd, {
+    stdio: 'inherit',
+    env: {
+      ...process.env,
+      PATH: `${localBin}:${process.env.PATH || ''}`,
+    },
+  });
 }
 
 function ensureSetup() {

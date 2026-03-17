@@ -257,6 +257,56 @@ describe('VerificationEngine', () => {
         expect(didCheck?.message).toBe('Unsupported DID method');
     });
 
+    it('fails DID resolution for malformed DID identifiers', async () => {
+      const malformedDidCred = {
+        ...validCredential,
+        issuer: { id: 'did:key:bad id with spaces' },
+      };
+
+      fetchMock.mockResolvedValue({ ok: true, json: async () => ({ valid: true }) } as Response);
+      const result = await engine.verifyCredential({ raw: malformedDidCred });
+      const didCheck = result.checks.find((c) => c.name === 'DID Resolution');
+
+      expect(didCheck?.status).toBe('failed');
+      expect(didCheck?.message).toContain('Invalid DID method-specific identifier');
+      expect(result.riskFlags).toContain('DID_RESOLUTION_FAILED');
+    });
+
+    it('warns when DID document lacks assertion/authentication linkage', async () => {
+      const didDocumentCred = {
+        ...validCredential,
+        issuer: {
+          id: 'did:web:issuer.example.com',
+          didDocument: {
+            verificationMethod: [{ id: 'did:web:issuer.example.com#key-1', type: 'JsonWebKey2020' }],
+            assertionMethod: ['did:web:issuer.example.com#missing'],
+            authentication: [],
+          },
+        },
+      };
+
+      fetchMock.mockImplementation(async (url) => {
+        if (typeof url === 'string' && url.includes('/registry/issuers/did/')) {
+          return {
+            ok: true,
+            json: async () => ({
+              did: 'did:web:issuer.example.com',
+              name: 'Issuer Web',
+              trustStatus: 'trusted',
+              verified: true,
+            }),
+          } as Response;
+        }
+        return { ok: true, json: async () => ({ valid: true }) } as Response;
+      });
+
+      const result = await engine.verifyCredential({ raw: didDocumentCred });
+      const didCheck = result.checks.find((c) => c.name === 'DID Resolution');
+
+      expect(didCheck?.status).toBe('warning');
+      expect(didCheck?.message).toContain('DID Document missing linked assertion/authentication verification method');
+    });
+
     it('applies timeout to external issuer lookup with explicit warning details', async () => {
       process.env.VERIFICATION_FETCH_TIMEOUT_MS = '25';
       engine = new VerificationEngine();

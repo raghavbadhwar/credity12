@@ -689,20 +689,95 @@ export class VerificationEngine {
             };
         }
 
-        // Real check: We actually tried to resolve it in verifyIssuer for the issuer.
-        // Here we just confirm the format and perhaps reachability (simulated reachability via regex for did:key)
-        const isDidKey = did.startsWith("did:key:");
-        const isDidWeb = did.startsWith("did:web:");
+        const didMatch = String(did).match(/^did:([a-z0-9]+):(.+)$/);
+        if (!didMatch) {
+            return {
+                name: 'DID Resolution',
+                status: 'failed',
+                message: 'Invalid DID syntax',
+                details: { did, code: 'DID_SYNTAX_INVALID' },
+            };
+        }
 
-        const resolved = isDidKey || isDidWeb; // We support these methods
+        const method = didMatch[1];
+        const methodSpecificId = didMatch[2];
+        const hasInvalidWhitespace = /\s/.test(methodSpecificId);
+        if (hasInvalidWhitespace || methodSpecificId.length === 0) {
+            return {
+                name: 'DID Resolution',
+                status: 'failed',
+                message: 'Invalid DID method-specific identifier',
+                details: { did, code: 'DID_IDENTIFIER_INVALID' },
+            };
+        }
+
+        if (method === 'key' && !methodSpecificId.startsWith('z')) {
+            return {
+                name: 'DID Resolution',
+                status: 'warning',
+                message: 'did:key identifier is not multibase-encoded',
+                details: { did, code: 'DID_KEY_MULTIBASE_INVALID' },
+            };
+        }
+
+        if (method === 'web') {
+            const hostPortion = methodSpecificId.split(':')[0];
+            if (!hostPortion || !/^[A-Za-z0-9.-]+$/.test(hostPortion)) {
+                return {
+                    name: 'DID Resolution',
+                    status: 'failed',
+                    message: 'did:web host segment is invalid',
+                    details: { did, code: 'DID_WEB_HOST_INVALID' },
+                };
+            }
+        }
+
+        const supportedMethod = method === 'key' || method === 'web';
+        if (!supportedMethod) {
+            return {
+                name: 'DID Resolution',
+                status: 'warning',
+                message: 'Unsupported DID method',
+                details: { did, code: 'DID_METHOD_UNSUPPORTED', method },
+            };
+        }
+
+        const didDocument = credential?.issuer?.didDocument || credential?.didDocument;
+        if (didDocument && typeof didDocument === 'object') {
+            const verificationMethods = Array.isArray((didDocument as any).verificationMethod)
+                ? (didDocument as any).verificationMethod
+                : [];
+            const verificationMethodIds = new Set(
+                verificationMethods
+                    .map((entry: any) => (typeof entry === 'string' ? entry : entry?.id))
+                    .filter((id: unknown): id is string => typeof id === 'string' && id.length > 0),
+            );
+            const assertionMethods = Array.isArray((didDocument as any).assertionMethod)
+                ? (didDocument as any).assertionMethod
+                : [];
+            const authenticationMethods = Array.isArray((didDocument as any).authentication)
+                ? (didDocument as any).authentication
+                : [];
+            const referencedMethodIds = [...assertionMethods, ...authenticationMethods]
+                .map((entry: any) => (typeof entry === 'string' ? entry : entry?.id))
+                .filter((id: unknown): id is string => typeof id === 'string' && id.length > 0);
+            const hasLinkedMethod = referencedMethodIds.some((id) => verificationMethodIds.has(id));
+
+            if (!hasLinkedMethod) {
+                return {
+                    name: 'DID Resolution',
+                    status: 'warning',
+                    message: 'DID Document missing linked assertion/authentication verification method',
+                    details: { did, code: 'DID_DOCUMENT_METHOD_LINK_MISSING' },
+                };
+            }
+        }
 
         return {
             name: 'DID Resolution',
-            status: resolved ? 'passed' : 'warning',
-            message: resolved
-                ? `DID method supported and resolvable: ${did.slice(0, 30)}...`
-                : 'Unsupported DID method',
-            details: { did, resolved },
+            status: 'passed',
+            message: `DID method supported and resolvable: ${did.slice(0, 30)}...`,
+            details: { did, resolved: true, method },
         };
     }
 

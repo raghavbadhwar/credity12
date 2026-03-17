@@ -1,4 +1,8 @@
 import crypto from 'crypto';
+import { execFileSync } from 'node:child_process';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import path from 'node:path';
 import type { ProofGenerationRequestContract, ProofGenerationResultContract } from '@credverse/shared-auth';
 import { deterministicHash } from './proof-lifecycle';
 
@@ -29,6 +33,43 @@ type GenerateProofInput = {
 
 const SUPPORTED_ZK_CIRCUITS = new Set(['score_threshold', 'age_verification', 'cross_vertical_aggregate']);
 
+function isTrue(value: string | undefined): boolean {
+  return typeof value === 'string' && ['1', 'true', 'yes', 'on'].includes(value.trim().toLowerCase());
+}
+
+function resolveZkRoot(): string {
+  return process.env.ZK_ROOT || path.resolve(process.cwd(), '..', 'zk');
+}
+
+function generateRuntimeZkProof(circuit: string, inputs: Record<string, unknown>): { proof: unknown; publicSignals: unknown } {
+  const zkRoot = resolveZkRoot();
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'credity-zk-'));
+  const inputPath = path.join(tempDir, `${circuit}-input.json`);
+
+  try {
+    fs.writeFileSync(inputPath, JSON.stringify(inputs), 'utf8');
+    execFileSync(
+      process.execPath,
+      [path.join(zkRoot, 'scripts', 'generate-zk-proof.mjs'), circuit, inputPath],
+      {
+        cwd: zkRoot,
+        stdio: 'pipe',
+        timeout: Number(process.env.ZK_RUNTIME_TIMEOUT_MS || 45_000),
+      },
+    );
+
+    const base = path.join(zkRoot, 'artifacts', circuit);
+    const proofPath = path.join(base, 'proof.json');
+    const publicPath = path.join(base, 'public.json');
+    return {
+      proof: JSON.parse(fs.readFileSync(proofPath, 'utf8')),
+      publicSignals: JSON.parse(fs.readFileSync(publicPath, 'utf8')),
+    };
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+}
+
 function extractZkHookMetadata(request: ProofGenerationRequestContract): Record<string, unknown> | null {
   const metadata = request.metadata;
   if (!metadata || typeof metadata !== 'object') return null;
@@ -40,10 +81,41 @@ function extractZkHookMetadata(request: ProofGenerationRequestContract): Record<
     return null;
   }
 
-  return {
+  const baseMetadata: Record<string, unknown> = {
     circuit,
     schema: 'credity.zk-hook/v1',
   };
+
+  const inputs = (zk as Record<string, unknown>).inputs;
+  if (!inputs || typeof inputs !== 'object') {
+    return {
+      ...baseMetadata,
+      status: 'metadata-only',
+    };
+  }
+
+  if (!isTrue(process.env.PROOF_ZK_RUNTIME_ENABLED)) {
+    return {
+      ...baseMetadata,
+      status: 'runtime-disabled',
+    };
+  }
+
+  try {
+    const runtimeProof = generateRuntimeZkProof(circuit, inputs as Record<string, unknown>);
+    return {
+      ...baseMetadata,
+      status: 'generated',
+      proof: runtimeProof.proof,
+      public_signals: runtimeProof.publicSignals,
+    };
+  } catch (error: any) {
+    return {
+      ...baseMetadata,
+      status: 'runtime-error',
+      error: error?.message || 'unknown_zk_runtime_error',
+    };
+  }
 }
 
 function toObjectPayload(credential: CredentialLike): Record<string, unknown> {
