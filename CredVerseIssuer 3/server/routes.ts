@@ -24,6 +24,11 @@ import { issuanceService } from "./services/issuance";
 import { blockchainService } from "./services/blockchain-service";
 
 import { setupSecurity } from "@credverse/shared-auth";
+import { getChainRuntimeConfig, resolveChainNetwork } from "@credverse/shared-auth";
+
+function isTrue(value: string | undefined): boolean {
+  return typeof value === "string" && ["1", "true", "yes", "on"].includes(value.trim().toLowerCase());
+}
 
 export async function registerRoutes(
   httpServer: Server,
@@ -81,23 +86,44 @@ export async function registerRoutes(
 
   // Relayer / blockchain config validation endpoint (L-3)
   app.get("/api/health/relayer", (_req, res) => {
-    const rpcUrl = process.env.BLOCKCHAIN_RPC_URL || process.env.POLYGON_RPC_URL || '';
     const privateKey = process.env.RELAYER_PRIVATE_KEY || '';
     const contractAddress = process.env.REGISTRY_CONTRACT_ADDRESS || '';
     const runtimeStatus = blockchainService.getRuntimeStatus();
+    const selectedChain = resolveChainNetwork(runtimeStatus.chainNetwork);
+    const chainConfig = getChainRuntimeConfig(selectedChain);
+    const requireBlockchain = isTrue(process.env.REQUIRE_BLOCKCHAIN) || process.env.NODE_ENV === 'production';
+    const resolvedRpcEnv = chainConfig.rpcEnvs.find((key) => {
+      const value = process.env[key];
+      return typeof value === 'string' && value.trim().length > 0;
+    });
+    const hasRpcUrl = Boolean(resolvedRpcEnv);
 
     const missingVars: string[] = [];
-    if (!rpcUrl) missingVars.push('BLOCKCHAIN_RPC_URL');
+    if (!hasRpcUrl) missingVars.push(`one_of:${chainConfig.rpcEnvs.join('|')}`);
     if (!privateKey) missingVars.push('RELAYER_PRIVATE_KEY');
     if (!contractAddress) missingVars.push('REGISTRY_CONTRACT_ADDRESS');
 
-    const ok = runtimeStatus.configured && missingVars.length === 0;
+    const relayerReady =
+      runtimeStatus.configured &&
+      runtimeStatus.writesAllowed &&
+      missingVars.length === 0;
+    const allowNonProdDegraded =
+      process.env.NODE_ENV !== 'production' && isTrue(process.env.ALLOW_NON_PROD_DEGRADED_RELAYER_HEALTH);
+    const ok = relayerReady || (!requireBlockchain && allowNonProdDegraded);
     res.status(ok ? 200 : 503).json({
       ok,
+      requireBlockchain,
+      relayerReady,
+      degradedAllowed: !relayerReady && !requireBlockchain && allowNonProdDegraded,
       configured: runtimeStatus.configured,
       writesAllowed: runtimeStatus.writesAllowed,
       chainNetwork: runtimeStatus.chainNetwork,
       networkName: runtimeStatus.networkName,
+      rpc: {
+        envCandidates: chainConfig.rpcEnvs,
+        resolvedFrom: resolvedRpcEnv ? `env:${resolvedRpcEnv}` : 'fallback',
+        resolvedRpcUrl: resolvedRpcEnv ? process.env[resolvedRpcEnv] : chainConfig.publicFallbackRpc,
+      },
       missingEnvVars: missingVars,
       writePolicyReason: runtimeStatus.writePolicyReason,
       timestamp: new Date().toISOString(),

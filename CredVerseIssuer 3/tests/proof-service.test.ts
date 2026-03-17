@@ -81,4 +81,31 @@ describe('issuer proof-service', () => {
     expect(proof.claims_digest).toBeTypeOf('string');
     expect(proof.claims_digest).not.toBe(legacyDigest);
   });
+
+  it('emits zk hook metadata when zk runtime is disabled', () => {
+    delete process.env.PROOF_ZK_RUNTIME_ENABLED;
+    const result = generateProof({
+      request: {
+        format: 'merkle-membership',
+        credential_id: 'cred-zk-1',
+        metadata: {
+          zk: {
+            circuit: 'score_threshold',
+            inputs: {
+              score: 900,
+              threshold: 700,
+            },
+          },
+        },
+      },
+      credential: {
+        id: 'cred-zk-1',
+        credentialData: { credentialSubject: { id: 'did:key:holder-1' } },
+      },
+      issuerBaseUrl: 'https://issuer.credity.example',
+    });
+
+    expect((result.proof as any)?.zk_hook?.circuit).toBe('score_threshold');
+    expect((result.proof as any)?.zk_hook?.status).toBe('runtime-disabled');
+  });
 });

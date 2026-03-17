@@ -1,4 +1,8 @@
 import crypto from 'crypto';
+import { execFileSync } from 'node:child_process';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import path from 'node:path';
 import type { ProofVerificationRequestContract, ProofVerificationResultContract } from '@credverse/shared-auth';
 import { verificationEngine } from './verification-engine';
 import { deterministicHash, deterministicHashLegacyTopLevel, parseCanonicalization, parseProofAlgorithm } from './proof-lifecycle';
@@ -20,6 +24,65 @@ type VerifyInput = ProofVerificationRequestContract & {
 };
 
 const SUPPORTED_ZK_CIRCUITS = new Set(['score_threshold', 'age_verification', 'cross_vertical_aggregate']);
+
+function isTrue(value: string | undefined): boolean {
+  return typeof value === 'string' && ['1', 'true', 'yes', 'on'].includes(value.trim().toLowerCase());
+}
+
+function resolveZkRoot(): string {
+  return process.env.ZK_ROOT || path.resolve(process.cwd(), '..', 'zk');
+}
+
+function verifyRuntimeZkHook(zkHook: Record<string, unknown>, reasonCodes: string[]): boolean {
+  const circuit = zkHook.circuit;
+  if (typeof circuit !== 'string' || !SUPPORTED_ZK_CIRCUITS.has(circuit)) {
+    reasonCodes.push('ZK_CIRCUIT_UNSUPPORTED');
+    return false;
+  }
+
+  const hasProofPayload = zkHook.proof && zkHook.public_signals;
+  const runtimeRequired = isTrue(process.env.PROOF_ZK_RUNTIME_REQUIRED);
+  const runtimeEnabled = isTrue(process.env.PROOF_ZK_RUNTIME_ENABLED);
+
+  if (!hasProofPayload) {
+    if (runtimeRequired) {
+      reasonCodes.push('ZK_PROOF_MISSING');
+      return false;
+    }
+    return true;
+  }
+
+  if (!runtimeEnabled) {
+    if (runtimeRequired) {
+      reasonCodes.push('ZK_RUNTIME_DISABLED');
+      return false;
+    }
+    return true;
+  }
+
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'credity-zk-verify-'));
+  const proofPath = path.join(tempDir, 'proof.json');
+  const publicPath = path.join(tempDir, 'public.json');
+  try {
+    fs.writeFileSync(proofPath, JSON.stringify(zkHook.proof), 'utf8');
+    fs.writeFileSync(publicPath, JSON.stringify(zkHook.public_signals), 'utf8');
+    execFileSync(
+      process.execPath,
+      [path.join(resolveZkRoot(), 'scripts', 'verify-zk-proof.mjs'), circuit, proofPath, publicPath],
+      {
+        cwd: resolveZkRoot(),
+        stdio: 'pipe',
+        timeout: Number(process.env.ZK_RUNTIME_TIMEOUT_MS || 45_000),
+      },
+    );
+    return true;
+  } catch (error: any) {
+    reasonCodes.push(error?.code === 'ETIMEDOUT' ? 'ZK_RUNTIME_TIMEOUT' : 'ZK_PROOF_INVALID');
+    return false;
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+}
 
 function makeResult(valid: boolean, reasonCodes: string[], extractedClaims?: Record<string, unknown>): ProofVerificationResultContract {
   return {
@@ -131,10 +194,9 @@ export async function verifyProofContract(input: VerifyInput): Promise<ProofVeri
   if (typeof input.proof === 'object') {
     const zkHook = (input.proof as Record<string, unknown>).zk_hook;
     if (zkHook && typeof zkHook === 'object') {
-      const circuit = (zkHook as Record<string, unknown>).circuit;
-      if (typeof circuit !== 'string' || !SUPPORTED_ZK_CIRCUITS.has(circuit)) {
+      const zkValid = verifyRuntimeZkHook(zkHook as Record<string, unknown>, reasonCodes);
+      if (!zkValid) {
         valid = false;
-        reasonCodes.push('ZK_CIRCUIT_UNSUPPORTED');
       }
     }
   }

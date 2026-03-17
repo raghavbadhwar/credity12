@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 import { spawn } from 'node:child_process';
+import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { ensureBootstrapTarget } from './bootstrap-deps.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, '..');
@@ -111,6 +113,23 @@ function terminateChildren() {
   }
 }
 
+function ensureServiceEnvFile(service, logFn = log) {
+  const envPath = path.join(service.cwd, '.env');
+  if (fs.existsSync(envPath)) {
+    return;
+  }
+
+  const envExamplePath = path.join(service.cwd, '.env.example');
+  if (fs.existsSync(envExamplePath)) {
+    fs.copyFileSync(envExamplePath, envPath);
+    logFn('orchestrator', `created ${service.name}/.env from .env.example`);
+    return;
+  }
+
+  fs.writeFileSync(envPath, '', 'utf8');
+  logFn('orchestrator', `created empty ${service.name}/.env for local gate startup`);
+}
+
 async function runGate() {
   return new Promise((resolve, reject) => {
     const gate = spawn('node', ['scripts/foundation-e2e-gate.mjs'], {
@@ -150,6 +169,17 @@ async function main() {
   });
 
   try {
+    log('orchestrator', 'running dependency preflight...');
+    await ensureBootstrapTarget('foundationLocal');
+    if (process.env.FOUNDATION_LOCAL_PREFLIGHT_ONLY === '1') {
+      log('orchestrator', 'preflight-only mode enabled. exiting without starting services.');
+      return;
+    }
+
+    for (const service of services) {
+      ensureServiceEnvFile(service);
+    }
+
     log('orchestrator', 'starting local services for foundation gate...');
     for (const service of services) {
       spawnService(service);

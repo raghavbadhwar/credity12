@@ -26,10 +26,23 @@ const pendingTwoFactorTokens = new Map<string, { userId: string; expiresAt: Date
  */
 router.post('/auth/register', async (req, res) => {
     try {
-        const { username, email, password } = req.body;
+        const { username, email, password, tenantId } = req.body;
 
         if (!username || !password) {
             return res.status(400).json({ error: 'Username and password required' });
+        }
+
+        let resolvedTenantId: string | undefined;
+        if (tenantId !== undefined) {
+            if (typeof tenantId !== 'string' || tenantId.trim().length === 0) {
+                return res.status(400).json({ error: 'tenantId must be a non-empty string' });
+            }
+            const normalizedTenantId = tenantId.trim();
+            const tenant = await storage.getTenant(normalizedTenantId);
+            if (!tenant) {
+                return res.status(400).json({ error: 'Invalid tenantId' });
+            }
+            resolvedTenantId = normalizedTenantId;
         }
 
         // Rate limit registration
@@ -52,8 +65,7 @@ router.post('/auth/register', async (req, res) => {
             username,
             password: passwordHash,
             role: 'user',
-            // tenantId can be set later or passed if multi-tenant
-            // For MVP, allow creating users without tenant or auto-assign
+            tenantId: resolvedTenantId,
         } as any);
 
         // Generate tokens

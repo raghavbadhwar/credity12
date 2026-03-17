@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import { blockchainService } from './blockchain-service';
 import { PostgresStateStore } from '@credverse/shared-auth';
+import { getExternalVerificationTimeoutMs, readJsonResponseWithGuards, safeFetch, SafeFetchError } from './safe-fetch';
 
 /**
  * Verification Engine for CredVerse Recruiter Portal
@@ -53,6 +54,21 @@ type VerificationEngineState = {
     verificationCache: Array<[string, PersistedVerificationResult]>;
     bulkJobs: Array<[string, PersistedBulkVerificationResult]>;
 };
+
+function isTrue(value: string | undefined): boolean {
+    return typeof value === 'string' && ['1', 'true', 'yes', 'on'].includes(value.trim().toLowerCase());
+}
+
+function shouldFailClosedOnRevocationUnknown(): boolean {
+    if (isTrue(process.env.REQUIRE_BLOCKCHAIN)) {
+        return true;
+    }
+    if (process.env.NODE_ENV !== 'production') {
+        return false;
+    }
+    return !isTrue(process.env.ALLOW_REVOCATION_FAIL_OPEN);
+}
+
 const hasDatabase = typeof process.env.DATABASE_URL === 'string' && process.env.DATABASE_URL.length > 0;
 const stateStore = hasDatabase
     ? new PostgresStateStore<VerificationEngineState>({
@@ -140,10 +156,12 @@ async function queuePersist(): Promise<void> {
 export class VerificationEngine {
     private walletEndpoint: string;
     private issuerRegistry: Map<string, IssuerInfo>;
+    private externalFetchTimeoutMs: number;
 
     constructor() {
         this.walletEndpoint = process.env.WALLET_ENDPOINT || 'http://localhost:5002';
         this.issuerRegistry = new Map();
+        this.externalFetchTimeoutMs = getExternalVerificationTimeoutMs();
         this.initializeIssuerRegistry();
     }
 
@@ -246,6 +264,11 @@ export class VerificationEngine {
             if (revocationCheck.status === 'failed') {
                 overallStatus = 'failed';
                 riskFlags.push('REVOKED_CREDENTIAL');
+            } else if (revocationCheck.status === 'warning') {
+                riskFlags.push('REVOCATION_STATUS_UNAVAILABLE');
+                if (shouldFailClosedOnRevocationUnknown() && overallStatus === 'verified') {
+                    overallStatus = 'suspicious';
+                }
             }
 
             // Check 5: On-chain Anchor Check
@@ -421,17 +444,27 @@ export class VerificationEngine {
         let issuerInfo = this.issuerRegistry.get(issuerDid.toLowerCase()) || this.issuerRegistry.get(issuerDid);
 
         // 2. Resolve remotely if not found - REAL API CALL
+        let remoteLookupErrorCode: string | null = null;
         if (!issuerInfo) {
             try {
                 // Call Issuer Service Public API
                 const registryUrl = process.env.ISSUER_REGISTRY_URL || 'http://localhost:5001';
-                const res = await fetch(`${registryUrl}/api/v1/public/registry/issuers/did/${encodeURIComponent(issuerDid)}`);
+                const res = await safeFetch(
+                    `${registryUrl}/api/v1/public/registry/issuers/did/${encodeURIComponent(issuerDid)}`,
+                    {
+                        timeoutMs: this.externalFetchTimeoutMs,
+                        allowPrivateNetwork: true,
+                    },
+                );
 
                 if (res.ok) {
-                    const remoteIssuer = await res.json();
+                    const remoteIssuer = await readJsonResponseWithGuards(res, {
+                        maxBytes: 256 * 1024,
+                        allowedContentTypes: ['application/json', '+json'],
+                    });
                     issuerInfo = {
-                        did: remoteIssuer.did,
-                        name: remoteIssuer.name,
+                        did: typeof remoteIssuer.did === 'string' ? remoteIssuer.did : issuerDid,
+                        name: typeof remoteIssuer.name === 'string' ? remoteIssuer.name : 'Unknown Issuer',
                         type: 'academic',
                         trustLevel: remoteIssuer.trustStatus === 'trusted' ? 'high' : 'medium',
                         verified: remoteIssuer.trustStatus === 'trusted'
@@ -444,6 +477,9 @@ export class VerificationEngine {
                     console.warn(`[Verification] Issuer lookup failed for ${issuerDid}: ${res.status}`);
                 }
             } catch (e) {
+                if (e instanceof SafeFetchError) {
+                    remoteLookupErrorCode = e.code;
+                }
                 console.error(`[Verification] Failed to resolve issuer ${issuerDid} remotely:`, e);
             }
         }
@@ -453,7 +489,12 @@ export class VerificationEngine {
                 name: 'Issuer Verification',
                 status: 'warning',
                 message: `Unknown issuer: ${issuerDid} (Not found in Registry w/ REAL lookup)`,
-                details: { issuer: issuerDid, trusted: false, registry: 'not_found' },
+                details: {
+                    issuer: issuerDid,
+                    trusted: false,
+                    registry: remoteLookupErrorCode ? 'lookup_failed' : 'not_found',
+                    code: remoteLookupErrorCode,
+                },
             };
         }
 
@@ -521,14 +562,25 @@ export class VerificationEngine {
                     name: 'Revocation Check',
                     status: 'warning',
                     message: 'Cannot check revocation (No Credential ID)',
+                    details: {
+                        code: 'REVOCATION_STATUS_UNAVAILABLE',
+                        reason: 'MISSING_CREDENTIAL_IDENTIFIER',
+                        checkedAt: new Date().toISOString(),
+                    },
                 };
             }
 
-            const res = await fetch(verificationUrl);
+            const res = await safeFetch(verificationUrl, {
+                timeoutMs: this.externalFetchTimeoutMs,
+                allowPrivateNetwork: true,
+            });
 
             if (res.ok) {
-                const data = await res.json();
-                const isRevoked = data.revoked;
+                const data = await readJsonResponseWithGuards(res, {
+                    maxBytes: 256 * 1024,
+                    allowedContentTypes: ['application/json', '+json'],
+                });
+                const isRevoked = data.revoked === true;
 
                 return {
                     name: 'Revocation Check',
@@ -543,9 +595,28 @@ export class VerificationEngine {
                     message: 'Credential not found in Issuer Registry (Invalid or Revoked)',
                     details: { code: 'ISSUER_CREDENTIAL_NOT_FOUND', checkedAt: new Date().toISOString() },
                 };
+            } else {
+                return {
+                    name: 'Revocation Check',
+                    status: 'warning',
+                    message: `Revocation status could not be verified (Issuer returned ${res.status})`,
+                    details: {
+                        code: 'ISSUER_STATUS_UNEXPECTED_RESPONSE',
+                        status: res.status,
+                        checkedAt: new Date().toISOString(),
+                    },
+                };
             }
         } catch (e) {
             console.error("Revocation check failed", e);
+            if (e instanceof SafeFetchError) {
+                return {
+                    name: 'Revocation Check',
+                    status: 'warning',
+                    message: `Revocation status could not be verified (${e.code})`,
+                    details: { code: e.code, checkedAt: new Date().toISOString() },
+                };
+            }
         }
 
         // Fallback if API fails (don't fail the credential, just warn)
@@ -553,7 +624,11 @@ export class VerificationEngine {
             name: 'Revocation Check',
             status: 'warning',
             message: 'Revocation status could not be verified (Issuer unreachable)',
-            details: { checkedAt: new Date().toISOString() },
+            details: {
+                code: 'REVOCATION_STATUS_UNAVAILABLE',
+                reason: 'ISSUER_UNREACHABLE',
+                checkedAt: new Date().toISOString(),
+            },
         };
     }
 
@@ -614,20 +689,95 @@ export class VerificationEngine {
             };
         }
 
-        // Real check: We actually tried to resolve it in verifyIssuer for the issuer.
-        // Here we just confirm the format and perhaps reachability (simulated reachability via regex for did:key)
-        const isDidKey = did.startsWith("did:key:");
-        const isDidWeb = did.startsWith("did:web:");
+        const didMatch = String(did).match(/^did:([a-z0-9]+):(.+)$/);
+        if (!didMatch) {
+            return {
+                name: 'DID Resolution',
+                status: 'failed',
+                message: 'Invalid DID syntax',
+                details: { did, code: 'DID_SYNTAX_INVALID' },
+            };
+        }
 
-        const resolved = isDidKey || isDidWeb; // We support these methods
+        const method = didMatch[1];
+        const methodSpecificId = didMatch[2];
+        const hasInvalidWhitespace = /\s/.test(methodSpecificId);
+        if (hasInvalidWhitespace || methodSpecificId.length === 0) {
+            return {
+                name: 'DID Resolution',
+                status: 'failed',
+                message: 'Invalid DID method-specific identifier',
+                details: { did, code: 'DID_IDENTIFIER_INVALID' },
+            };
+        }
+
+        if (method === 'key' && !methodSpecificId.startsWith('z')) {
+            return {
+                name: 'DID Resolution',
+                status: 'warning',
+                message: 'did:key identifier is not multibase-encoded',
+                details: { did, code: 'DID_KEY_MULTIBASE_INVALID' },
+            };
+        }
+
+        if (method === 'web') {
+            const hostPortion = methodSpecificId.split(':')[0];
+            if (!hostPortion || !/^[A-Za-z0-9.-]+$/.test(hostPortion)) {
+                return {
+                    name: 'DID Resolution',
+                    status: 'failed',
+                    message: 'did:web host segment is invalid',
+                    details: { did, code: 'DID_WEB_HOST_INVALID' },
+                };
+            }
+        }
+
+        const supportedMethod = method === 'key' || method === 'web';
+        if (!supportedMethod) {
+            return {
+                name: 'DID Resolution',
+                status: 'warning',
+                message: 'Unsupported DID method',
+                details: { did, code: 'DID_METHOD_UNSUPPORTED', method },
+            };
+        }
+
+        const didDocument = credential?.issuer?.didDocument || credential?.didDocument;
+        if (didDocument && typeof didDocument === 'object') {
+            const verificationMethods = Array.isArray((didDocument as any).verificationMethod)
+                ? (didDocument as any).verificationMethod
+                : [];
+            const verificationMethodIds = new Set(
+                verificationMethods
+                    .map((entry: any) => (typeof entry === 'string' ? entry : entry?.id))
+                    .filter((id: unknown): id is string => typeof id === 'string' && id.length > 0),
+            );
+            const assertionMethods = Array.isArray((didDocument as any).assertionMethod)
+                ? (didDocument as any).assertionMethod
+                : [];
+            const authenticationMethods = Array.isArray((didDocument as any).authentication)
+                ? (didDocument as any).authentication
+                : [];
+            const referencedMethodIds = [...assertionMethods, ...authenticationMethods]
+                .map((entry: any) => (typeof entry === 'string' ? entry : entry?.id))
+                .filter((id: unknown): id is string => typeof id === 'string' && id.length > 0);
+            const hasLinkedMethod = referencedMethodIds.some((id) => verificationMethodIds.has(id));
+
+            if (!hasLinkedMethod) {
+                return {
+                    name: 'DID Resolution',
+                    status: 'warning',
+                    message: 'DID Document missing linked assertion/authentication verification method',
+                    details: { did, code: 'DID_DOCUMENT_METHOD_LINK_MISSING' },
+                };
+            }
+        }
 
         return {
             name: 'DID Resolution',
-            status: resolved ? 'passed' : 'warning',
-            message: resolved
-                ? `DID method supported and resolvable: ${did.slice(0, 30)}...`
-                : 'Unsupported DID method',
-            details: { did, resolved },
+            status: 'passed',
+            message: `DID method supported and resolvable: ${did.slice(0, 30)}...`,
+            details: { did, resolved: true, method },
         };
     }
 
@@ -650,6 +800,7 @@ export class VerificationEngine {
             'UNKNOWN_ISSUER': 20,
             'EXPIRED_CREDENTIAL': 25,
             'REVOKED_CREDENTIAL': 50,
+            'REVOCATION_STATUS_UNAVAILABLE': 20,
             'NO_BLOCKCHAIN_ANCHOR': 5,
             'DID_RESOLUTION_FAILED': 15,
             'UNVERIFIED_ISSUER': 10,

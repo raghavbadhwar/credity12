@@ -12,6 +12,22 @@ type VerificationPayload = {
     vc?: unknown;
 };
 
+function isTrue(value: string | undefined): boolean {
+    return typeof value === "string" && ["1", "true", "yes", "on"].includes(value.trim().toLowerCase());
+}
+
+function shouldRequireBlockchainRevocation(): boolean {
+    if (isTrue(process.env.REQUIRE_BLOCKCHAIN)) {
+        return true;
+    }
+
+    if (process.env.NODE_ENV !== "production") {
+        return false;
+    }
+
+    return !isTrue(process.env.ALLOW_REVOCATION_FAIL_OPEN);
+}
+
 function decodeJwtPayload(vcJwt: string): VerificationPayload {
     const parts = vcJwt.split(".");
     if (parts.length !== 3) {
@@ -64,6 +80,7 @@ async function verifyJwtSignature(vcJwt: string, payload: VerificationPayload): 
 
 async function resolveRevocationState(credentialId: string): Promise<"revoked" | "active" | "unknown"> {
     const credential = await storage.getCredential(credentialId);
+    const requireBlockchain = shouldRequireBlockchainRevocation();
     if (credential?.revoked) {
         return "revoked";
     }
@@ -76,6 +93,9 @@ async function resolveRevocationState(credentialId: string): Promise<"revoked" |
 
     const chainRevoked = await relayerService.isRevoked(onChainLookupKey);
     if (chainRevoked === null) {
+        if (requireBlockchain) {
+            return "unknown";
+        }
         // If we have a local credential record and it is not revoked, treat it as active
         // when on-chain checks are unavailable.
         if (credential) {

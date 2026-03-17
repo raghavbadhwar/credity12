@@ -25,6 +25,9 @@ vi.mock('@credverse/shared-auth', async () => {
 // Mock fetch globally
 const fetchMock = vi.fn();
 global.fetch = fetchMock;
+const previousNodeEnv = process.env.NODE_ENV;
+const previousRequireBlockchain = process.env.REQUIRE_BLOCKCHAIN;
+const previousAllowRevocationFailOpen = process.env.ALLOW_REVOCATION_FAIL_OPEN;
 
 describe('VerificationEngine', () => {
   let engine: VerificationEngine;
@@ -51,6 +54,22 @@ describe('VerificationEngine', () => {
 
   afterEach(() => {
     vi.resetAllMocks();
+    delete process.env.VERIFICATION_FETCH_TIMEOUT_MS;
+    if (previousNodeEnv === undefined) {
+      delete process.env.NODE_ENV;
+    } else {
+      process.env.NODE_ENV = previousNodeEnv;
+    }
+    if (previousRequireBlockchain === undefined) {
+      delete process.env.REQUIRE_BLOCKCHAIN;
+    } else {
+      process.env.REQUIRE_BLOCKCHAIN = previousRequireBlockchain;
+    }
+    if (previousAllowRevocationFailOpen === undefined) {
+      delete process.env.ALLOW_REVOCATION_FAIL_OPEN;
+    } else {
+      process.env.ALLOW_REVOCATION_FAIL_OPEN = previousAllowRevocationFailOpen;
+    }
   });
 
   it('initializes with default issuers', () => {
@@ -185,6 +204,31 @@ describe('VerificationEngine', () => {
       expect(result.checks.find(c => c.name === 'Blockchain Anchor')?.status).toBe('warning');
     });
 
+    it('prevents fail-open in production when revocation status is unavailable', async () => {
+      process.env.NODE_ENV = 'production';
+      delete process.env.REQUIRE_BLOCKCHAIN;
+      delete process.env.ALLOW_REVOCATION_FAIL_OPEN;
+      fetchMock.mockRejectedValueOnce(new Error('issuer offline'));
+
+      const result = await engine.verifyCredential({ raw: validCredential });
+      const revocationCheck = result.checks.find((c) => c.name === 'Revocation Check');
+
+      expect(revocationCheck?.status).toBe('warning');
+      expect(result.status).toBe('suspicious');
+      expect(result.riskFlags).toContain('REVOCATION_STATUS_UNAVAILABLE');
+    });
+
+    it('allows explicit fail-open override in production for compatibility', async () => {
+      process.env.NODE_ENV = 'production';
+      process.env.ALLOW_REVOCATION_FAIL_OPEN = 'true';
+      delete process.env.REQUIRE_BLOCKCHAIN;
+      fetchMock.mockRejectedValueOnce(new Error('issuer offline'));
+
+      const result = await engine.verifyCredential({ raw: validCredential });
+      expect(result.status).toBe('verified');
+      expect(result.riskFlags).toContain('REVOCATION_STATUS_UNAVAILABLE');
+    });
+
     it('handles unsupported DID method', async () => {
         const unsupportedDidCred = {
             ...validCredential,
@@ -211,6 +255,83 @@ describe('VerificationEngine', () => {
         const didCheck = result.checks.find(c => c.name === 'DID Resolution');
         expect(didCheck?.status).toBe('warning');
         expect(didCheck?.message).toBe('Unsupported DID method');
+    });
+
+    it('fails DID resolution for malformed DID identifiers', async () => {
+      const malformedDidCred = {
+        ...validCredential,
+        issuer: { id: 'did:key:bad id with spaces' },
+      };
+
+      fetchMock.mockResolvedValue({ ok: true, json: async () => ({ valid: true }) } as Response);
+      const result = await engine.verifyCredential({ raw: malformedDidCred });
+      const didCheck = result.checks.find((c) => c.name === 'DID Resolution');
+
+      expect(didCheck?.status).toBe('failed');
+      expect(didCheck?.message).toContain('Invalid DID method-specific identifier');
+      expect(result.riskFlags).toContain('DID_RESOLUTION_FAILED');
+    });
+
+    it('warns when DID document lacks assertion/authentication linkage', async () => {
+      const didDocumentCred = {
+        ...validCredential,
+        issuer: {
+          id: 'did:web:issuer.example.com',
+          didDocument: {
+            verificationMethod: [{ id: 'did:web:issuer.example.com#key-1', type: 'JsonWebKey2020' }],
+            assertionMethod: ['did:web:issuer.example.com#missing'],
+            authentication: [],
+          },
+        },
+      };
+
+      fetchMock.mockImplementation(async (url) => {
+        if (typeof url === 'string' && url.includes('/registry/issuers/did/')) {
+          return {
+            ok: true,
+            json: async () => ({
+              did: 'did:web:issuer.example.com',
+              name: 'Issuer Web',
+              trustStatus: 'trusted',
+              verified: true,
+            }),
+          } as Response;
+        }
+        return { ok: true, json: async () => ({ valid: true }) } as Response;
+      });
+
+      const result = await engine.verifyCredential({ raw: didDocumentCred });
+      const didCheck = result.checks.find((c) => c.name === 'DID Resolution');
+
+      expect(didCheck?.status).toBe('warning');
+      expect(didCheck?.message).toContain('DID Document missing linked assertion/authentication verification method');
+    });
+
+    it('applies timeout to external issuer lookup with explicit warning details', async () => {
+      process.env.VERIFICATION_FETCH_TIMEOUT_MS = '25';
+      engine = new VerificationEngine();
+
+      fetchMock.mockImplementation(async (_url, init) => {
+        const signal = init?.signal as AbortSignal | undefined;
+        return await new Promise<Response>((_resolve, reject) => {
+          signal?.addEventListener('abort', () => {
+            const abortError = new Error('aborted');
+            (abortError as Error & { name: string }).name = 'AbortError';
+            reject(abortError);
+          });
+        });
+      });
+
+      const timedOutCred = {
+        ...validCredential,
+        id: undefined,
+        issuer: 'did:key:issuer-timeout',
+      };
+      const result = await engine.verifyCredential({ raw: timedOutCred });
+
+      const issuerCheck = result.checks.find((c) => c.name === 'Issuer Verification');
+      expect(issuerCheck?.status).toBe('warning');
+      expect((issuerCheck?.details as { code?: string } | undefined)?.code).toBe('VERIFICATION_FETCH_TIMEOUT');
     });
   });
 

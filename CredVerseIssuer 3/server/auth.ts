@@ -58,6 +58,46 @@ async function resolveApiKeyTenant(keyHeader: string): Promise<{ tenantId: strin
     return { tenantId: apiKey.tenantId, keyHash };
 }
 
+function normalizeTenantId(value: unknown): string | undefined {
+    if (typeof value !== "string") {
+        return undefined;
+    }
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : undefined;
+}
+
+async function deriveTenantFromToken(payload: any): Promise<{ tenantId?: string; status?: number; message?: string; code?: string }> {
+    const tokenTenantId = normalizeTenantId(payload?.tenantId);
+    const userId = payload?.userId;
+    const normalizedUserId =
+        typeof userId === "string" || typeof userId === "number" ? String(userId).trim() : "";
+
+    let userTenantId: string | undefined;
+    if (normalizedUserId.length > 0) {
+        const userRecord = await storage.getUser(normalizedUserId);
+        userTenantId = normalizeTenantId((userRecord as any)?.tenantId);
+    }
+
+    if (tokenTenantId && userTenantId && tokenTenantId !== userTenantId) {
+        return {
+            status: 403,
+            message: "Authenticated tenant mismatch",
+            code: "AUTH_TENANT_MISMATCH",
+        };
+    }
+
+    const tenantId = tokenTenantId || userTenantId;
+    if (!tenantId) {
+        return {
+            status: 401,
+            message: "Unable to derive tenant from authenticated identity",
+            code: "AUTH_UNAUTHORIZED",
+        };
+    }
+
+    return { tenantId };
+}
+
 function enforceApiRateLimit(keyHash: string): { allowed: boolean; error?: string } {
     const now = Date.now();
     pruneRateLimitMap(now);
@@ -102,10 +142,12 @@ export async function apiKeyMiddleware(req: Request, res: Response, next: NextFu
 /**
  * Allow either API key auth or JWT auth for mobile/app flows.
  * Tenant context is always derived from trusted auth material (API key/JWT), never body/query.
+ * If both x-api-key and Authorization are present, x-api-key takes precedence; an invalid key
+ * fails the request and does not silently fall back to bearer auth.
  */
 export async function apiKeyOrAuthMiddleware(req: Request, res: Response, next: NextFunction) {
     const apiKeyHeader = req.headers["x-api-key"];
-    if (apiKeyHeader && typeof apiKeyHeader === "string") {
+    if (typeof apiKeyHeader === "string" && apiKeyHeader.trim().length > 0) {
         const resolved = await resolveApiKeyTenant(apiKeyHeader);
         if (resolved.error) {
             return res.status(401).json({ message: resolved.error, code: "AUTH_UNAUTHORIZED" });
@@ -118,6 +160,8 @@ export async function apiKeyOrAuthMiddleware(req: Request, res: Response, next: 
 
         (req as any).tenantId = resolved.tenantId;
         return next();
+    } else if (apiKeyHeader) {
+        return res.status(401).json({ message: "Missing or invalid API Key", code: "AUTH_UNAUTHORIZED" });
     }
 
     const authHeader = req.headers.authorization;
@@ -132,12 +176,15 @@ export async function apiKeyOrAuthMiddleware(req: Request, res: Response, next: 
     }
 
     (req as any).user = payload;
-    const tokenTenantId = typeof (payload as any).tenantId === "string" && (payload as any).tenantId.trim().length > 0
-        ? String((payload as any).tenantId).trim()
-        : undefined;
+    const resolvedTenant = await deriveTenantFromToken(payload);
+    if (resolvedTenant.message || resolvedTenant.code || resolvedTenant.status) {
+        return res
+            .status(resolvedTenant.status || 401)
+            .json({ message: resolvedTenant.message, code: resolvedTenant.code || "AUTH_UNAUTHORIZED" });
+    }
 
-    // SECURITY: never derive tenant context from client-controlled body/query fields.
-    (req as any).tenantId = tokenTenantId || String(payload.userId);
+    // SECURITY: tenant context is derived deterministically from trusted identity material only.
+    (req as any).tenantId = resolvedTenant.tenantId;
     next();
 }
 
